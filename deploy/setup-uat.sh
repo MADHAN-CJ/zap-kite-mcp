@@ -3,6 +3,7 @@
 # systemd unit, .env skeleton with fresh secrets, nginx reminder. Re-runnable.
 set -euo pipefail
 APP=/opt/zap-kite-mcp
+export UV_PYTHON_INSTALL_DIR=/var/lib/zapkite/python
 REPO=https://github.com/MADHAN-CJ/zap-kite-mcp.git
 USER_NAME=zapkite
 STATE=/var/lib/zapkite
@@ -20,7 +21,8 @@ git config --global --add safe.directory "$APP"
 chown -R "$USER_NAME:$USER_NAME" "$APP"
 
 sudo -u "$USER_NAME" -H bash -c 'command -v ~/.local/bin/uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh'
-sudo -u "$USER_NAME" -H bash -c "cd $APP && ~/.local/bin/uv python install 3.12 && ~/.local/bin/uv sync --no-dev --frozen"
+mkdir -p "$UV_PYTHON_INSTALL_DIR" && chown "$USER_NAME:$USER_NAME" "$UV_PYTHON_INSTALL_DIR"
+sudo -u "$USER_NAME" -H bash -c "export UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR; cd $APP && ~/.local/bin/uv python install 3.12 && ~/.local/bin/uv sync --no-dev --frozen"
 
 if [ ! -f "$APP/.env" ]; then
   cat > "$APP/.env" <<ENV
