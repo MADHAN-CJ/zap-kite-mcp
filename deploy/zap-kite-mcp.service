@@ -1,0 +1,33 @@
+[Unit]
+Description=zap-kite-mcp (Kite Connect sandbox MCP, watchers and web app)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=zapkite
+Group=zapkite
+WorkingDirectory=/opt/zap-kite-mcp
+EnvironmentFile=/opt/zap-kite-mcp/.env
+ExecStart=/opt/zap-kite-mcp/.venv/bin/zap-kite-mcp
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+InaccessiblePaths=-/var/www -/etc/nginx -/etc/letsencrypt -/opt/zap-claude-mcp -/opt/zap-eve-mcp
+ReadWritePaths=/var/lib/zapkite
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+MemoryMax=1G
+CPUQuota=200%
+TasksMax=256
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from dataclasses import dataclass, field
@@ -15,7 +16,9 @@ from zapkite.config import IST
 from zapkite.options_math import black76_price
 
 API_KEY = "key"
+API_SECRET = "secret"
 ACCESS_TOKEN = "tok"
+REQUEST_TOKEN = "rt-good"
 TODAY = date(2026, 10, 15)
 OPTION_IV = 0.15
 RATE = 0.07
@@ -273,6 +276,8 @@ class FakeKite:
         self.calls.append(request)
         if request.headers.get("X-Kite-Version") != "3":
             return self._error(400, "InputException", "Missing X-Kite-Version")
+        if request.url.path == "/session/token":
+            return self._session(request)
         if (
             request.headers.get("Authorization") != f"token {API_KEY}:{ACCESS_TOKEN}"
             or not self.token_valid
@@ -392,6 +397,23 @@ class FakeKite:
                 {"candles": self._candles(start, end, interval, q.get("oi", ["0"])[0] == "1")}
             )
         return self._error(404, "GeneralException", f"Route not found: {path}")
+
+    def _session(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "DELETE":
+            return self._ok(True)
+        form = parse_qs(request.content.decode())
+        rt = form.get("request_token", [""])[0]
+        checksum = hashlib.sha256(f"{API_KEY}{rt}{API_SECRET}".encode()).hexdigest()
+        if rt != REQUEST_TOKEN or form.get("checksum", [""])[0] != checksum:
+            return self._error(403, "TokenException", "Invalid `request_token`.")
+        return self._ok(
+            {
+                "user_id": "AB1234",
+                "user_name": "Test User",
+                "access_token": ACCESS_TOKEN,
+                "login_time": "2026-10-15 09:00:00",
+            }
+        )
 
     @staticmethod
     def _ok(data: Any) -> httpx.Response:

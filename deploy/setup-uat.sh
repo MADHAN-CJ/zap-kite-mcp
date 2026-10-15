@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# One-time setup on the shared uat box (run as root): service user, clone, venv, state dir,
+# systemd unit, .env skeleton with fresh secrets, nginx reminder. Re-runnable.
+set -euo pipefail
+APP=/opt/zap-kite-mcp
+REPO=https://github.com/MADHAN-CJ/zap-kite-mcp.git
+USER_NAME=zapkite
+STATE=/var/lib/zapkite
+NGINX_SITE=/etc/nginx/sites-enabled/revise.default
+PUBLIC_URL=https://uat.revise.network/zap-kite-mcp/v1
+APP_URL=${ZAP_KITE_MCP_APP_URL:-https://zap-kite.vercel.app}
+
+id -u "$USER_NAME" >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin "$USER_NAME"
+mkdir -p "$STATE" && chown "$USER_NAME:$USER_NAME" "$STATE" && chmod 750 "$STATE"
+
+if [ ! -d "$APP/.git" ]; then
+  git clone --quiet "$REPO" "$APP"
+fi
+git config --global --add safe.directory "$APP"
+chown -R "$USER_NAME:$USER_NAME" "$APP"
+
+sudo -u "$USER_NAME" -H bash -c 'command -v ~/.local/bin/uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh'
+sudo -u "$USER_NAME" -H bash -c "cd $APP && ~/.local/bin/uv python install 3.12 && ~/.local/bin/uv sync --no-dev --frozen"
+
+if [ ! -f "$APP/.env" ]; then
+  cat > "$APP/.env" <<ENV
+KITE_API_KEY=
+KITE_API_SECRET=
+DATABASE_URL=
+ZAP_KITE_MCP_PUBLIC_URL=$PUBLIC_URL
+ZAP_KITE_MCP_APP_URL=$APP_URL
+ZAP_KITE_MCP_HOST=127.0.0.1
+ZAP_KITE_MCP_PORT=8019
+ZAP_KITE_MCP_STATE_DIR=$STATE
+SESSION_SECRET=$(openssl rand -hex 32)
+CREDS_ENCRYPTION_KEY=$(openssl rand -hex 32)
+SWEEP_SECRET=$(openssl rand -hex 24)
+RESEND_API_KEY=
+EMAIL_FROM=Zap <login-link@codeongrass.com>
+ENV
+  chown "$USER_NAME:$USER_NAME" "$APP/.env" && chmod 600 "$APP/.env"
+  echo "wrote $APP/.env; fill KITE_API_KEY, KITE_API_SECRET, DATABASE_URL, RESEND_API_KEY"
+fi
+
+install -m 644 "$APP/deploy/zap-kite-mcp.service" /etc/systemd/system/zap-kite-mcp.service
+systemctl daemon-reload
+
+if ! grep -q 'location /zap-kite-mcp/v1/' "$NGINX_SITE"; then
+  echo "nginx: add the blocks from $APP/deploy/nginx.conf to $NGINX_SITE, then: nginx -t && systemctl reload nginx"
+fi
+
+if grep -q '^KITE_API_KEY=.\+' "$APP/.env" && grep -q '^DATABASE_URL=.\+' "$APP/.env"; then
+  systemctl enable --now zap-kite-mcp
+  sleep 2 && systemctl is-active zap-kite-mcp && curl -fsS http://127.0.0.1:8019/health && echo
+else
+  echo "fill $APP/.env, then: systemctl enable --now zap-kite-mcp"
+fi
