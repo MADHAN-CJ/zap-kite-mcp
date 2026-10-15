@@ -1,0 +1,48 @@
+[project]
+name = "zap-kite-mcp"
+version = "0.1.0"
+description = "Sandbox MCP for Zerodha Kite Connect: Claude writes Python against the read-only zapkite library; the server runs it, watches markets and manages Kite logins."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+  "mcp[cli]>=2.2",
+  "httpx>=0.28",
+]
+
+[project.scripts]
+zap-kite-mcp = "zap_kite_mcp.server:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.14",
+  "mypy>=1.19",
+  "pre-commit>=4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zapkite", "src/zap_kite_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "N"]
+ignore = ["N818", "RUF022"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+files = ["src", "tests", "scripts"]
