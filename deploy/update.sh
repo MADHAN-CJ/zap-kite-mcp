@@ -11,7 +11,7 @@ PORT=${PORT:-8019}
 git -C "$APP" fetch --quiet origin
 git -C "$APP" checkout --quiet -B dev origin/dev
 chown -R zapkite:zapkite "$APP"
-sudo -u zapkite -H bash -c "export UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR; cd $APP && ~/.local/bin/uv sync --no-dev --frozen"
+sudo -u zapkite -H bash -c "export UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR; cd $APP/mcp && ~/.local/bin/uv sync --no-dev --frozen"
 install -m 644 "$APP/deploy/$UNIT.service" "/etc/systemd/system/$UNIT.service"
 systemctl daemon-reload
 systemctl restart "$UNIT"

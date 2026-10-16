@@ -47,7 +47,7 @@ def check(name: str, fn: Callable[[], Any]) -> bool:
 
 
 def main() -> int:
-    load_env(Path(__file__).resolve().parents[1] / ".env")
+    load_env(Path(__file__).resolve().parents[2] / ".env")
     if not os.environ.get("KITE_API_KEY") or not os.environ.get("KITE_ACCESS_TOKEN"):
         print("Set KITE_API_KEY and KITE_ACCESS_TOKEN (or put them in .env)")
         return 2

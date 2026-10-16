@@ -11,12 +11,12 @@ when they become true) and a small web app where users log in to Zerodha and man
 
 | Piece | What it does |
 |---|---|
-| `zapkite` | Library Claude's scripts import: account reads, quotes, candles, instruments, a derived option chain with Black-76 greeks, indicators, market hours. Read-only by construction. |
-| `zap_kite_mcp.server` | MCP server (Streamable HTTP, OAuth 2.1 authorization + resource server with dynamic client registration and PKCE), tools `run_python`, `auth_status`, `create_watcher`, `list_watchers`. |
+| `mcp/src/zapkite` | Library Claude's scripts import: account reads, quotes, candles, instruments, a derived option chain with Black-76 greeks, indicators, market hours. Read-only by construction. |
+| `mcp/src/zap_kite_mcp` | MCP server (Streamable HTTP, OAuth 2.1 authorization + resource server with dynamic client registration and PKCE), tools `run_python`, `auth_status`, `create_watcher`, `list_watchers`. |
 | Gateway | Local `GET /kite/...` endpoint. Scripts hold only a per-run token; the gateway injects the user's Kite access token, allows read endpoints only and applies Kite's per-app rate limits. |
 | Runner | Spawns `python -I` per script with a scrubbed environment, wall-clock timeout, output cap and a per-user workspace that persists between calls. |
 | Watchers | Postgres-backed sweeper: baseline on first check, one alert per not-met→met transition, market-hours gate per exchange, pause when the Kite session ends and auto-resume after the next login. |
-| Web app (`web/`) | Next.js app for Vercel: email + one-time-code sign-in, Zerodha login and callback, disconnect, watcher pause/resume/cancel. Shares the database and the crypto formats with the Python server. |
+| Web app (repo root: `app/`, `components/`, `lib/`) | Next.js app for Vercel: email + one-time-code sign-in, Zerodha login and callback, disconnect, watcher pause/resume/cancel. Shares the database and the crypto formats with the Python server. |
 
 Kite facts that shape the design: Kite sessions end around 06:00 IST every day and cannot be
 refreshed (users log in again from the web app); rate limits apply per API key, so one limiter
@@ -35,21 +35,25 @@ instruments dump plus one batched quote call.
 ## Run locally
 
 ```sh
-cp .env.example .env            # fill KITE_API_KEY, KITE_API_SECRET, DATABASE_URL, secrets
-uv sync
-uv run zap-kite-mcp             # migrates the database, serves http://127.0.0.1:8019
-
-cd web && cp .env.example .env  # same DATABASE_URL, SESSION_SECRET, CREDS_ENCRYPTION_KEY, Kite app
-npm install && npm run dev      # http://127.0.0.1:3019
+cp .env.example .env            # one file for both services: Kite app, DATABASE_URL, secrets
+npm install && npm run dev      # web app on http://127.0.0.1:3019
+npm run mcp                     # Python server: migrates the database, serves http://127.0.0.1:8019
 ```
 
-Set `DEV_LOGIN_EMAIL` and `DEV_LOGIN_CODE` in both `.env` files to sign in without email while
+`npm run mcp` is `uv run --directory mcp zap-kite-mcp`; the Python project lives in `mcp/`
+with its own `pyproject.toml` and `uv.lock`.
+
+Give Claude [`mcp/SKILL.md`](mcp/SKILL.md): it is the document that teaches the model how to write
+scripts against `zapkite` (one composed script per question, return shapes, Kite quirks,
+watcher contract). The tool description carries only a short reference.
+
+Set `DEV_LOGIN_EMAIL` and `DEV_LOGIN_CODE` in `.env` to sign in without email while
 developing. Open the web app, sign in, click "Log in to Zerodha". Add the MCP to claude.ai as a
 custom connector with URL `http://127.0.0.1:8019/` (a public HTTPS URL in production); the
 connector runs the OAuth flow with the same email sign-in.
 
-`scripts/kite_login.py` obtains a Kite access token without the web app and
-`scripts/live_smoke.py` exercises the library against the real API with it.
+`mcp/scripts/kite_login.py` obtains a Kite access token without the web app and
+`npm run mcp:smoke` exercises the library against the real API with it.
 
 ## Deploy
 
@@ -58,21 +62,19 @@ root-level OAuth discovery routes a path-scoped issuer needs), a one-time `setup
 `update.sh`. `package.json` wraps them: `npm run deploy:setup` once, then `npm run deploy` after
 every push to `dev`; `npm run status` and `npm run logs` for operations.
 
-Web app: import the repository into Vercel with root directory `web/`, add the variables from
-`web/.env.example`, and point the Kite app's redirect URL at `https://<domain>/api/broker/kite/callback`.
+Web app: import the repository into Vercel (root directory = repository root), add the web
+variables from `.env.example`, and point the Kite app's redirect URL at `https://<domain>/api/broker/kite/callback`.
 Set `ZAP_KITE_MCP_APP_URL` on the Python server to the same domain.
 
 ## Development
 
 ```sh
-uv run ruff check . && uv run ruff format --check .
-uv run mypy
-uv run pytest       # needs Postgres; ZAP_KITE_MCP_TEST_DATABASE_URL overrides the default
+npm run mcp:check   # ruff, mypy, pytest in mcp/ (pytest needs Postgres; ZAP_KITE_MCP_TEST_DATABASE_URL overrides the default)
+npm run typecheck && npm run lint && npm test && npm run build   # web app
 ```
 
 The Python suite runs the real server against an in-process fake Kite: OAuth login, scripts
-through the gateway, token expiry, watcher lifecycle and emails. `npm run web:check` typechecks,
-lints and tests the web app; its tests pin the crypto formats to vectors produced by the Python
+through the gateway, token expiry, watcher lifecycle and emails. The web tests pin the crypto formats to vectors produced by the Python
 side.
 
 ## Licence
@@ -82,7 +84,7 @@ MIT. See [LICENSE](LICENSE).
 ## Staging
 
 The `dev` branch is the staging source for both services. Vercel deploys it to
-**Preview** (Development is Vercel's local environment), with project root `web/`.
+**Preview** (Development is Vercel's local environment), with the repository root as the project root.
 `main` remains reserved for future production changes; do not promote staging previews.
 
 - App and its `/api/*` routes: `https://staging-kite-app.slash.markets`.

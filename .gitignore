@@ -1,10 +1,20 @@
-.venv/
+# python (mcp/)
+mcp/.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 dist/
+
+# next.js (repo root)
+node_modules/
+.next/
+.vercel/
+next-env.d.ts
+*.tsbuildinfo
+
+# local only
 .env
 .env.*
 !.env.example

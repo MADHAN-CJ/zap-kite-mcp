@@ -6,10 +6,10 @@ Wants=network-online.target
 [Service]
 User=zapkite
 Group=zapkite
-WorkingDirectory=/opt/zap-kite-mcp
+WorkingDirectory=/opt/zap-kite-mcp/mcp
 EnvironmentFile=/opt/zap-kite-mcp/.env
 Environment=HOME=/var/lib/zapkite
-ExecStart=/opt/zap-kite-mcp/.venv/bin/zap-kite-mcp
+ExecStart=/opt/zap-kite-mcp/mcp/.venv/bin/zap-kite-mcp
 Restart=always
 RestartSec=3
 

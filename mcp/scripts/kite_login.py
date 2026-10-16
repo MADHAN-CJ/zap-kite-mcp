@@ -43,7 +43,7 @@ def write_env(path: Path, key: str, value: str) -> None:
 
 
 def main() -> int:
-    env_path = Path(__file__).resolve().parents[1] / ".env"
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_env(env_path)
     api_key, api_secret = os.environ.get("KITE_API_KEY", ""), os.environ.get("KITE_API_SECRET", "")
     if not api_key or not api_secret:

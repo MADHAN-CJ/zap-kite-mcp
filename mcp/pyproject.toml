@@ -2,7 +2,7 @@
 name = "zap-kite-mcp"
 version = "0.1.0"
 description = "Sandbox MCP for Zerodha Kite Connect: Claude writes Python against the read-only zapkite library; the server runs it, watches markets and manages Kite logins."
-readme = "README.md"
+readme = "SKILL.md"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [

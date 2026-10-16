@@ -7,6 +7,7 @@ import sys
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 
 import anyio
@@ -419,16 +420,29 @@ def _run_http(server: MCPServer, s: Settings) -> None:
     )
 
 
+def _env_file(explicit: str | None) -> str:
+    if explicit:
+        return explicit
+    for candidate in (Path(".env"), Path("..") / ".env"):
+        if candidate.is_file():
+            return str(candidate)
+    return ".env"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="zap-kite-mcp")
-    parser.add_argument("--env-file", default=".env", help="KEY=VALUE file to load first")
+    parser.add_argument(
+        "--env-file",
+        default=None,
+        help="KEY=VALUE file to load first (default: .env, then ../.env)",
+    )
     parser.add_argument("--migrate", action="store_true", help="apply migrations and exit")
     args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, stream=sys.stderr, format="%(levelname)s %(name)s: %(message)s"
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    load_dotenv(args.env_file, override=False)
+    load_dotenv(_env_file(args.env_file), override=False)
     try:
         settings = load_settings()
     except ConfigError as e:

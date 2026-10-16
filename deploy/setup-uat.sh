@@ -22,7 +22,7 @@ chown -R "$USER_NAME:$USER_NAME" "$APP"
 
 sudo -u "$USER_NAME" -H bash -c 'command -v ~/.local/bin/uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh'
 mkdir -p "$UV_PYTHON_INSTALL_DIR" && chown "$USER_NAME:$USER_NAME" "$UV_PYTHON_INSTALL_DIR"
-sudo -u "$USER_NAME" -H bash -c "export UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR; cd $APP && ~/.local/bin/uv python install 3.12 && ~/.local/bin/uv sync --no-dev --frozen"
+sudo -u "$USER_NAME" -H bash -c "export UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR; cd $APP/mcp && ~/.local/bin/uv python install 3.12 && ~/.local/bin/uv sync --no-dev --frozen"
 
 if [ ! -f "$APP/.env" ]; then
   cat > "$APP/.env" <<ENV
