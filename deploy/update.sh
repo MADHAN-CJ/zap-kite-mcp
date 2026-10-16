@@ -15,8 +15,20 @@ sudo -u zapkite -H bash -c "export UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR;
 install -m 644 "$APP/deploy/$UNIT.service" "/etc/systemd/system/$UNIT.service"
 systemctl daemon-reload
 systemctl restart "$UNIT"
-sleep 2
+# Startup includes migrations; wait for readiness rather than assuming two seconds.
+READY=false
+for attempt in {1..30}; do
+  if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/health" 2>/dev/null; then
+    READY=true
+    break
+  fi
+  sleep 1
+done
+if [ "$READY" != true ]; then
+  systemctl status "$UNIT" --no-pager
+  echo "MCP did not become healthy within the startup window" >&2
+  exit 1
+fi
 systemctl is-active "$UNIT"
-curl -fsS "http://127.0.0.1:$PORT/health"
 echo
 git -C "$APP" log -1 --format='deployed %h %s'
