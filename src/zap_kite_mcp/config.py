@@ -64,7 +64,7 @@ class Settings:
 
     @property
     def mcp_url(self) -> str:
-        return f"{self.public_url}/mcp"
+        return f"{self.public_url}/"
 
     @property
     def workspace_dir(self) -> Path:

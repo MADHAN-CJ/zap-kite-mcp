@@ -88,6 +88,7 @@ class Harness:
         self.app = srv.build_app(self.settings, kite_transport=self.fake.transport())
         mcp = srv.build_server(self.app)
         asgi = mcp.streamable_http_app(
+            streamable_http_path="/",
             stateless_http=True,
             json_response=True,
             transport_security=srv.transport_security(self.settings),
@@ -209,7 +210,7 @@ def oauth_tokens(h: Harness, email: str = DEV_EMAIL) -> dict[str, Any]:
 
 class Mcp:
     def __init__(self, base: str, token: str) -> None:
-        self.url = f"{base}/mcp"
+        self.url = f"{base}/"
         self.h = httpx.Client(timeout=120)
         self.token = token
         self.n = 0
@@ -284,9 +285,10 @@ def test_health_and_oauth_metadata(h: Harness) -> None:
     meta = httpx.get(f"{h.base}/.well-known/oauth-authorization-server").json()
     assert meta["issuer"].rstrip("/") == h.base
     assert meta["registration_endpoint"] == f"{h.base}/register"
-    prm = httpx.get(f"{h.base}/.well-known/oauth-protected-resource/mcp").json()
-    assert prm["resource"] == f"{h.base}/mcp"
-    assert httpx.post(f"{h.base}/mcp", json={}).status_code == 401
+    prm = httpx.get(f"{h.base}/.well-known/oauth-protected-resource").json()
+    assert prm["resource"] == f"{h.base}/"
+    assert httpx.post(f"{h.base}/", json={}).status_code == 401
+    assert httpx.post(f"{h.base}/mcp", json={}).status_code == 404
 
 
 def test_oauth_login_and_tools_before_connecting(h: Harness) -> None:
@@ -474,7 +476,7 @@ def test_refresh_token_rotation(h: Harness) -> None:
     assert second["access_token"] != first["access_token"]
     assert Mcp(h.base, second["access_token"]).tools()
     stale = httpx.post(
-        f"{h.base}/mcp",
+        f"{h.base}/",
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
         headers={
             "Authorization": f"Bearer {first['access_token']}",

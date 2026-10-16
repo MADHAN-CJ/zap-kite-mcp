@@ -45,7 +45,7 @@ npm install && npm run dev      # http://127.0.0.1:3019
 
 Set `DEV_LOGIN_EMAIL` and `DEV_LOGIN_CODE` in both `.env` files to sign in without email while
 developing. Open the web app, sign in, click "Log in to Zerodha". Add the MCP to claude.ai as a
-custom connector with URL `http://127.0.0.1:8019/mcp` (a public HTTPS URL in production); the
+custom connector with URL `http://127.0.0.1:8019/` (a public HTTPS URL in production); the
 connector runs the OAuth flow with the same email sign-in.
 
 `scripts/kite_login.py` obtains a Kite access token without the web app and
@@ -87,7 +87,7 @@ The `dev` branch is the staging source for both services. Vercel deploys it to
 
 - App and its `/api/*` routes: `https://staging-kite-app.slash.markets`.
   Add this project domain with Preview branch `dev`; use Vercel's returned DNS target.
-- MCP connector: `https://staging-kite-mcp.slash.markets/mcp` on UAT `64.227.149.33`.
+- MCP connector: `https://staging-kite-mcp.slash.markets/` on UAT `64.227.149.33`.
   `deploy/staging-nginx.conf` is a separate nginx site; obtain its TLS certificate with
   Certbot before enabling the HTTPS block. Preserve the existing UAT site.
 - Vercel Preview `NEXT_PUBLIC_MCP_URL` must match the MCP connector URL. It is embedded

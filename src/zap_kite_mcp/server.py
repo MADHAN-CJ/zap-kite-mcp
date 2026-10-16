@@ -398,7 +398,7 @@ def serve(app: App) -> None:
     s = app.settings
     sweeper = Sweeper(app.watchers, s.sweep_interval_s)
     sweeper.start()
-    log.info("zap-kite-mcp on http://%s:%s/mcp  public %s", s.host, s.port, s.mcp_url)
+    log.info("zap-kite-mcp on http://%s:%s/  public %s", s.host, s.port, s.mcp_url)
     try:
         _run_http(server, s)
     finally:
@@ -410,6 +410,7 @@ def _run_http(server: MCPServer, s: Settings) -> None:
         lambda: server.run_streamable_http_async(
             host=s.host,
             port=s.port,
+            streamable_http_path="/",
             stateless_http=True,
             json_response=True,
             max_request_body_size=512 * 1024,
