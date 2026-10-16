@@ -7,7 +7,7 @@ export UV_PYTHON_INSTALL_DIR=/var/lib/zapkite/python
 REPO=https://github.com/MADHAN-CJ/zap-kite-mcp.git
 USER_NAME=zapkite
 STATE=/var/lib/zapkite
-NGINX_SITE=/etc/nginx/sites-enabled/revise.default
+NGINX_SITE=/etc/nginx/sites-available/staging-kite-mcp
 PUBLIC_URL=${ZAP_KITE_MCP_PUBLIC_URL:-https://staging-kite-mcp.slash.markets}
 APP_URL=${ZAP_KITE_MCP_APP_URL:-https://staging-kite-app.slash.markets}
 
@@ -47,8 +47,8 @@ fi
 install -m 644 "$APP/deploy/zap-kite-mcp.service" /etc/systemd/system/zap-kite-mcp.service
 systemctl daemon-reload
 
-if ! grep -q 'location /zap-kite-mcp/v1/' "$NGINX_SITE"; then
-  echo "nginx: add the blocks from $APP/deploy/nginx.conf to $NGINX_SITE, then: nginx -t && systemctl reload nginx"
+if [ ! -f "$NGINX_SITE" ]; then
+  echo "nginx: configure staging-kite-mcp.slash.markets as a dedicated HTTP site, issue its certificate with certbot --nginx, then use $APP/deploy/staging-nginx.conf"
 fi
 
 if grep -q '^KITE_API_KEY=.\+' "$APP/.env" && grep -q '^DATABASE_URL=.\+' "$APP/.env"; then

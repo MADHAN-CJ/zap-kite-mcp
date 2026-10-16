@@ -107,3 +107,9 @@ Git pushes trigger Vercel and CI; MCP deployment remains an explicit `npm run de
 Changing the MCP OAuth issuer requires existing connector clients to reconnect using
 its new URL. The former UAT route is retained for migration but is not a separate issuer.
 An API-only hostname is deferred; the app continues using same-origin API requests.
+
+Vercel Deployment Protection must have an exception for only
+`staging-kite-app.slash.markets`, otherwise Preview protection intercepts both the
+app and Zerodha callback. Keep all generated Preview URLs protected. The app's
+own authentication is still required for protected APIs. The domain's Namecheap
+CNAME target is `2415d0c3a7c8697b.vercel-dns-017.com` (recheck Vercel if moving projects).
