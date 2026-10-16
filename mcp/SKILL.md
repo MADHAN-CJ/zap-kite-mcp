@@ -1,11 +1,11 @@
 ---
-name: zap-kite-data
-description: Query a live Zerodha (Kite Connect) account and Indian market data by writing Python through the Zap Kite connector. Use for anything about the user's positions, holdings, funds, orders, trades, mutual funds or GTTs, and for NSE/BSE stocks and indices, NFO/BFO index and stock F&O, MCX commodities and CDS/BCD currency — prices and depth, intraday and daily candles, indicators (EMA/RSI/MACD/Bollinger/ATR/VWAP), option chains with computed greeks, expiries, continuous futures — and for arming e-mail watchers. Trigger on P&L questions, "what is X trading at", trend/outlook/levels, NIFTY/BANKNIFTY/SENSEX or any F&O stock, option IV/OI/max-pain, GOLD/CRUDEOIL/USDINR, "alert me when…".
+name: slash-markets-kite-data
+description: Query a live Zerodha (Kite Connect) account and Indian market data by writing Python through the Slash Markets Kite connector. Use for anything about the user's positions, holdings, funds, orders, trades, mutual funds or GTTs, and for NSE/BSE stocks and indices, NFO/BFO index and stock F&O, MCX commodities and CDS/BCD currency — prices and depth, intraday and daily candles, indicators (EMA/RSI/MACD/Bollinger/ATR/VWAP), option chains with computed greeks, expiries, continuous futures — and for arming e-mail watchers. Trigger on P&L questions, "what is X trading at", trend/outlook/levels, NIFTY/BANKNIFTY/SENSEX or any F&O stock, option IV/OI/max-pain, GOLD/CRUDEOIL/USDINR, "alert me when…".
 ---
 
-# Zap Kite data via Python
+# Slash Markets Kite data via Python
 
-You have one data tool: **`run_python(code)`**. It executes your Python on Zap's
+You have one data tool: **`run_python(code)`**. It executes your Python on Slash Markets'
 server, where the user's Kite session is already wired in through a local gateway,
 and returns whatever the script printed. The data never enters your context unless
 you print it, so for any question that needs more than one number write a script
@@ -112,7 +112,7 @@ A traceback you need to fix, or a genuine follow-up question from the user. Not
 - Each script has a budget of about 40 Kite requests (`CallBudgetExceeded`
   otherwise). Batch quote keys into one `z.ltp([...])`, keep `strikes_around` small,
   use wider candle intervals.
-- Kite rate limits are shared by every Zap user on one app key: quotes 1 request/s,
+- Kite rate limits are shared by every Slash Markets user on one app key: quotes 1 request/s,
   candles 3/s. `RateLimited` means wait a few seconds, not retry in a loop.
 - `print(z.help_api())` lists every function with its first doc line.
 - Everything is read-only. There is no order placement, modification or
@@ -122,7 +122,7 @@ A traceback you need to fix, or a genuine follow-up question from the user. Not
 
 | Exception | Meaning | What to tell the user |
 | --- | --- | --- |
-| `TokenExpired` | The Zerodha session ended (Kite clears every session during its overnight reset, usually 05:30–07:30 IST) or the user disconnected. | Log in to Zerodha again from the Zap web app (`auth_status` gives the link). Nothing in a script can refresh it. |
+| `TokenExpired` | The Zerodha session ended (Kite clears every session during its overnight reset, usually 05:30–07:30 IST) or the user disconnected. | Log in to Zerodha again from the Slash Markets web app (`auth_status` gives the link). Nothing in a script can refresh it. |
 | `DataPlanMissing` | Kite returned "Insufficient permission" for candles or quotes: the Connect app lacks the market-data plan. | Account reads still work; market data needs the plan. |
 | `InstrumentNotFound` | No instrument matched the key, token or symbol. | Try `z.search_instruments(q)`. |
 | `RateLimited` / `CallBudgetExceeded` | See Mechanics. | Fetch less, batch more. |

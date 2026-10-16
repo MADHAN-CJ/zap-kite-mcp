@@ -4,7 +4,7 @@ import { exchangeRequestToken, userFromState } from "@/lib/server/kite";
 
 export const dynamic = "force-dynamic";
 
-/** Zerodha redirects here after login; the signed `state` names the Zap user. */
+/** Zerodha redirects here after login; the signed `state` names the Slash Markets user. */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const home = new URL("/", url.origin);

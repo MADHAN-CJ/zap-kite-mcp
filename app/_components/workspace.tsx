@@ -95,7 +95,7 @@ export function Workspace() {
             <ZapIcon className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="font-medium text-lg tracking-tight">Zap</h1>
+            <h1 className="font-medium text-lg tracking-tight">Slash Markets</h1>
             <p className="truncate text-muted-foreground text-xs">{getUser()?.email}</p>
           </div>
           <Button onClick={signOut} size="sm" variant="ghost">

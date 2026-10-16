@@ -18,7 +18,7 @@ const mono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Zap",
+  title: "Slash Markets",
   description:
     "Connect Zerodha to Claude and manage market watchers. Read-only: it can never trade.",
 };

@@ -36,7 +36,7 @@ from .watchers import BROKER_REASONS, Watchers
 
 log = logging.getLogger("zap_kite_mcp")
 
-RULES = """Run a Python 3 script in the Zap sandbox and return what it prints. Use it for ANY question about the user's Zerodha account (positions, holdings, funds, today's orders and trades, mutual funds, GTTs) or Indian market data (prices, depth, candles, option chains, expiries, instrument lookup) across NSE/BSE stocks and indices, NFO/BFO index and stock F&O, MCX commodities and CDS/BCD currency.
+RULES = """Run a Python 3 script in the Slash Markets sandbox and return what it prints. Use it for ANY question about the user's Zerodha account (positions, holdings, funds, today's orders and trades, mutual funds, GTTs) or Indian market data (prices, depth, candles, option chains, expiries, instrument lookup) across NSE/BSE stocks and indices, NFO/BFO index and stock F&O, MCX commodities and CDS/BCD currency.
 
 HOW TO USE
 - Write a COMPLETE script that does `import zapkite as z`. It is pre-installed and read-only; the user's Kite session is already wired in through a local gateway, so never ask for, print or hard-code credentials. Standard library only (json, statistics, math, datetime, csv, sqlite3, collections); pandas/numpy are NOT installed.
@@ -44,7 +44,7 @@ HOW TO USE
 - Files persist in the working directory between calls: store big fetched data in a file in one script and read it back in the next.
 - One question may need several scripts; call this tool once per script and compose the answer yourself.
 - A failing script returns its traceback as an error. Fix the code and retry; if it keeps failing, tell the user plainly what could not be done.
-- Errors explain themselves: TokenExpired means the user must log in to Zerodha again in the Zap app (sessions end every morning around 06:00 IST; call auth_status for the link). DataPlanMissing means the Kite Connect app lacks the market-data plan. CallBudgetExceeded means fetch less (batch quote keys, fewer strikes, wider intervals). RateLimited means Kite throttled the shared app key; wait a few seconds.
+- Errors explain themselves: TokenExpired means the user must log in to Zerodha again in the Slash Markets app (sessions end every morning around 06:00 IST; call auth_status for the link). DataPlanMissing means the Kite Connect app lacks the market-data plan. CallBudgetExceeded means fetch less (batch quote keys, fewer strikes, wider intervals). RateLimited means Kite throttled the shared app key; wait a few seconds.
 - IDS: quote keys are "EXCHANGE:TRADINGSYMBOL" ("NSE:INFY", "NFO:NIFTY25OCT24700CE", "MCX:GOLD25DECFUT"); z.resolve_symbol("TCS" | "NIFTY" | "GOLD" | "USDINR") picks the instrument to quote or chart (stock → NSE share, index → spot index, commodity/currency → nearest future). Option underlyings are plain names (NIFTY, BANKNIFTY, FINNIFTY, SENSEX, RELIANCE, GOLD, CRUDEOIL, USDINR). Candle intervals: 1, 3, 5, 10, 15, 30, 60 minutes or day.
 - Kite has NO option-chain or greeks API: z.option_chain derives the chain from the instrument dump plus ONE batched quote and computes Black-76 IV/greeks (indicative). Expired option contracts are not available; z.continuous_futures gives rolling futures history.
 - Hours (Mon–Fri): NSE/BSE/NFO/BFO 09:15–15:30, CDS/BCD 09:00–17:00, MCX 09:00–23:30 IST; check z.market_status(). Off-hours, quotes are the last traded price. Money is ₹.
@@ -58,7 +58,7 @@ Who is signed in and whether their Zerodha (Kite) session is usable right now.
 
 Call this when run_python reports a TokenExpired or session problem, or when the user asks
 about their connection. If the session is expired or not connected, relay the returned
-`message` and `appUrl`: the user logs in to Zerodha from the Zap app, never by pasting
+`message` and `appUrl`: the user logs in to Zerodha from the Slash Markets app, never by pasting
 credentials into this chat.\
 """
 
@@ -143,9 +143,9 @@ def build_app(
 
 def broker_message(reason: str, app_url: str) -> str:
     return {
-        "not_connected": f"Zerodha is not connected to this Zap account yet. Open {app_url} and log in to Zerodha, then try again.",
+        "not_connected": f"Zerodha is not connected to this Slash Markets account yet. Open {app_url} and log in to Zerodha, then try again.",
         "token_expired": f"The Zerodha session has expired (Kite sessions end every morning). Open {app_url} and log in to Zerodha again, then try again.",
-        "disconnected": f"Zerodha was disconnected from this Zap account. Open {app_url} and log in to Zerodha again, then try again.",
+        "disconnected": f"Zerodha was disconnected from this Slash Markets account. Open {app_url} and log in to Zerodha again, then try again.",
     }[reason]
 
 
@@ -172,9 +172,9 @@ def build_server(app: App) -> MCPServer:
     description = RULES + reference(brief=True)
 
     server = MCPServer(
-        "zap-kite",
+        "slash-markets-kite",
         instructions=(
-            "Zap Kite sandbox: answer Zerodha account and Indian market questions by writing "
+            "Slash Markets Kite sandbox: answer Zerodha account and Indian market questions by writing "
             "Python against `zapkite` and running it with run_python. Print only compact results."
         ),
         auth_server_provider=app.provider,
@@ -309,7 +309,7 @@ def build_server(app: App) -> MCPServer:
             "Sign in",
             pages.email_form(
                 f"{s.public_url}/login/email",
-                "Connect Claude to your Zap account",
+                "Connect Claude to your Slash Markets account",
                 "Read-only: Claude can analyse your Zerodha account but can never trade.",
                 hidden=hidden,
             ),
@@ -327,7 +327,7 @@ def build_server(app: App) -> MCPServer:
         except IdentityError as e:
             body = pages.email_form(
                 f"{s.public_url}/login/email",
-                "Connect Claude to your Zap account",
+                "Connect Claude to your Slash Markets account",
                 "Read-only: Claude can analyse your Zerodha account but can never trade.",
                 pages.error_box(str(e)),
                 hidden,

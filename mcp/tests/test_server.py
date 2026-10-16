@@ -368,7 +368,7 @@ def test_token_expiry_marks_connection_and_pauses_watchers(h: Harness) -> None:
 
     report = sweep(h)
     assert report["expiryMails"] == 1
-    assert h.app.mailer.sent[-1]["subject"].startswith("Zap watchers paused")
+    assert h.app.mailer.sent[-1]["subject"].startswith("Slash Markets watchers paused")
     assert sweep(h)["expiryMails"] == 0
 
     h.fake.token_valid = True

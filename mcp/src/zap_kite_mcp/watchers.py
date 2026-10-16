@@ -31,11 +31,14 @@ _MCX_RE = re.compile(
 )
 
 BROKER_REASONS = {
-    "not_connected": "Zerodha is not connected. Log in to Zerodha in the Zap app, then resume.",
-    "token_expired": (
-        "The Zerodha session expired. Log in again in the Zap app; watchers resume automatically."
+    "not_connected": (
+        "Zerodha is not connected. Log in to Zerodha in the Slash Markets app, then resume."
     ),
-    "disconnected": "Zerodha is disconnected. Log in again in the Zap app, then resume.",
+    "token_expired": (
+        "The Zerodha session expired. Log in again in the Slash Markets app; "
+        "watchers resume automatically."
+    ),
+    "disconnected": "Zerodha is disconnected. Log in again in the Slash Markets app, then resume.",
 }
 
 
@@ -312,11 +315,13 @@ class Watchers:
     def _notify_expired_sessions(self, report: dict[str, Any]) -> None:
         for user_id, email in self._broker.users_to_notify_of_expiry():
             text = (
-                "Your Zerodha session has ended (Kite sessions expire every morning), so your Zap "
+                "Your Zerodha session has ended (Kite sessions expire every morning), "
+                "so your Slash Markets "
                 "watchers are paused.\n\nLog in to Zerodha again and they resume automatically:\n"
                 f"{self.page_url}\n\nZap is read-only; it can never trade."
             )
-            if self._mailer.send(email, "Zap watchers paused: log in to Zerodha again", text):
+            subject = "Slash Markets watchers paused: log in to Zerodha again"
+            if self._mailer.send(email, subject, text):
                 self._broker.record_expiry_mail(user_id)
                 report["expiryMails"] += 1
 
@@ -352,7 +357,8 @@ class Watchers:
             "",
             f"Manage your watchers: {self.page_url}",
             "",
-            "Zap is read-only; it can never trade. It alerts again after the condition resets.",
+            "Slash Markets is read-only; it can never trade. "
+            "It alerts again after the condition resets.",
         ]
         return self._mailer.send(email, f"⚡ {row['symbol']}: {row['label']}", "\n".join(lines))
 

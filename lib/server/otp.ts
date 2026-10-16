@@ -31,8 +31,8 @@ export async function requestOtp(rawEmail: string): Promise<void> {
   );
   const ok = await sendEmail(
     email,
-    `${code} is your Zap login code`,
-    `Your Zap login code is ${code}. It expires in 10 minutes.\n\nIf you didn't request it, ignore this email.`,
+    `${code} is your Slash Markets login code`,
+    `Your Slash Markets login code is ${code}. It expires in 10 minutes.\n\nIf you didn't request it, ignore this email.`,
   );
   if (!ok) throw new HttpError(502, "Could not send the login code. Try again in a moment.");
 }

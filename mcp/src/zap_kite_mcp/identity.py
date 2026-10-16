@@ -48,8 +48,8 @@ class Identity:
         )
         ok = self._mailer.send(
             email,
-            f"{code} is your Zap login code",
-            f"Your Zap login code is {code}. It expires in 10 minutes.\n\n"
+            f"{code} is your Slash Markets login code",
+            f"Your Slash Markets login code is {code}. It expires in 10 minutes.\n\n"
             "If you didn't request it, ignore this email.",
         )
         if not ok:

@@ -38,7 +38,7 @@ SESSION_SECRET=$(openssl rand -hex 32)
 CREDS_ENCRYPTION_KEY=$(openssl rand -hex 32)
 SWEEP_SECRET=$(openssl rand -hex 24)
 RESEND_API_KEY=
-EMAIL_FROM=Zap <login-link@codeongrass.com>
+EMAIL_FROM=Slash Markets <login-link@codeongrass.com>
 ENV
   chown "$USER_NAME:$USER_NAME" "$APP/.env" && chmod 600 "$APP/.env"
   echo "wrote $APP/.env; fill KITE_API_KEY, KITE_API_SECRET, DATABASE_URL, RESEND_API_KEY"

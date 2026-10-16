@@ -4,7 +4,7 @@ import html
 
 _SHELL = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>{title} · Zap</title>
+<meta name="robots" content="noindex"><title>{title} · Slash Markets</title>
 <style>
   :root {{ color-scheme: light dark; --brand: #0c6b3d; --danger: #b3261e; }}
   body {{ font: 15px/1.5 system-ui, sans-serif; max-width: 44rem; margin: 6vh auto; padding: 0 16px; }}
@@ -34,7 +34,7 @@ _SHELL = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .actions {{ margin-top: 10px; }}
   code {{ font-size: .9em; }}
 </style></head><body>
-<p><a class="brand" href="{home}">&#9889; Zap</a></p>
+<p><a class="brand" href="{home}">&#9889; Slash Markets</a></p>
 {body}
 </body></html>"""
 

@@ -54,7 +54,7 @@ export function Login({ onLoggedIn }: { readonly onLoggedIn: () => void }) {
           <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <ZapIcon className="size-5" />
           </span>
-          <h1 className="font-medium text-3xl tracking-tighter">Zap</h1>
+          <h1 className="font-medium text-3xl tracking-tighter">Slash Markets</h1>
           <p className="text-muted-foreground text-sm">
             Connect Zerodha to Claude and manage your market watchers. Read-only: it can never
             trade.

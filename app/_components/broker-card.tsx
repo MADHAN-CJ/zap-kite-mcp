@@ -79,7 +79,7 @@ export function BrokerCard({
     token_expired:
       "Zerodha ended the daily session. Log in again to resume Claude access and watchers.",
     disconnected: "Log in to Zerodha to let Claude read this account.",
-    not_connected: "Log in to Zerodha to let Claude read this account. Zap never places orders.",
+    not_connected: "Log in to Zerodha to let Claude read this account. Slash Markets never places orders.",
   }[state];
 
   return (

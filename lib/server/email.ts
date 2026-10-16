@@ -10,7 +10,7 @@ export async function sendEmail(to: string, subject: string, text: string): Prom
     method: "POST",
     headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
     body: JSON.stringify({
-      from: process.env.EMAIL_FROM ?? "Zap <no-reply@example.com>",
+      from: process.env.EMAIL_FROM ?? "Slash Markets <no-reply@example.com>",
       to: [to],
       subject,
       text,
