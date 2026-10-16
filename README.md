@@ -56,7 +56,7 @@ connector runs the OAuth flow with the same email sign-in.
 Python server: `deploy/` holds a hardened systemd unit, an nginx snippet (including the
 root-level OAuth discovery routes a path-scoped issuer needs), a one-time `setup-uat.sh` and
 `update.sh`. `package.json` wraps them: `npm run deploy:setup` once, then `npm run deploy` after
-every push to `main`; `npm run status` and `npm run logs` for operations.
+every push to `dev`; `npm run status` and `npm run logs` for operations.
 
 Web app: import the repository into Vercel with root directory `web/`, add the variables from
 `web/.env.example`, and point the Kite app's redirect URL at `https://<domain>/api/broker/kite/callback`.
@@ -78,3 +78,32 @@ side.
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+## Staging
+
+The `dev` branch is the staging source for both services. Vercel deploys it to
+**Preview** (Development is Vercel's local environment), with project root `web/`.
+`main` remains reserved for future production changes; do not promote staging previews.
+
+- App and its `/api/*` routes: `https://staging-kite-app.slash.markets`.
+  Add this project domain with Preview branch `dev`; use Vercel's returned DNS target.
+- MCP connector: `https://staging-kite-mcp.slash.markets/mcp` on UAT `64.227.149.33`.
+  `deploy/staging-nginx.conf` is a separate nginx site; obtain its TLS certificate with
+  Certbot before enabling the HTTPS block. Preserve the existing UAT site.
+- Vercel Preview `NEXT_PUBLIC_MCP_URL` must match the MCP connector URL. It is embedded
+  at build time, so changes require a new deployment.
+- UAT `.env`: `ZAP_KITE_MCP_PUBLIC_URL=https://staging-kite-mcp.slash.markets` and
+  `ZAP_KITE_MCP_APP_URL=https://staging-kite-app.slash.markets` once the app domain works.
+- Kite Connect redirect URL: `https://staging-kite-app.slash.markets/api/broker/kite/callback`.
+  Set this in the Kite developer console only after the domain is ready.
+- Keep the existing database, `SESSION_SECRET`, `CREDS_ENCRYPTION_KEY`, Kite credentials,
+  and email configuration identical between UAT and Vercel Preview. Never regenerate them
+  during this hostname migration. Staging currently shares the existing UAT data;
+  a future production environment needs separately provisioned data and credentials.
+
+`npm run deploy` invokes `/root/zap-kite-mcp-deploy/update.sh` on UAT. Keep that
+operator copy synchronized with `deploy/update.sh`: it checks out `origin/dev`.
+Git pushes trigger Vercel and CI; MCP deployment remains an explicit `npm run deploy`.
+Changing the MCP OAuth issuer requires existing connector clients to reconnect using
+its new URL. The former UAT route is retained for migration but is not a separate issuer.
+An API-only hostname is deferred; the app continues using same-origin API requests.

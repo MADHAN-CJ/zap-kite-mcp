@@ -8,14 +8,14 @@ REPO=https://github.com/MADHAN-CJ/zap-kite-mcp.git
 USER_NAME=zapkite
 STATE=/var/lib/zapkite
 NGINX_SITE=/etc/nginx/sites-enabled/revise.default
-PUBLIC_URL=https://uat.revise.network/zap-kite-mcp/v1
-APP_URL=${ZAP_KITE_MCP_APP_URL:-https://zap-kite.vercel.app}
+PUBLIC_URL=${ZAP_KITE_MCP_PUBLIC_URL:-https://staging-kite-mcp.slash.markets}
+APP_URL=${ZAP_KITE_MCP_APP_URL:-https://staging-kite-app.slash.markets}
 
 id -u "$USER_NAME" >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin "$USER_NAME"
 mkdir -p "$STATE" && chown "$USER_NAME:$USER_NAME" "$STATE" && chmod 750 "$STATE"
 
 if [ ! -d "$APP/.git" ]; then
-  git clone --quiet "$REPO" "$APP"
+  git clone --quiet --branch dev "$REPO" "$APP"
 fi
 git config --global --add safe.directory "$APP"
 chown -R "$USER_NAME:$USER_NAME" "$APP"
