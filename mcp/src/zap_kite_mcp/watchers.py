@@ -291,6 +291,7 @@ class Watchers:
         }
         self._notify_expired_sessions(report)
         self._retry_unsent(report)
+        self._db.execute("DELETE FROM otps WHERE expires_at < now() - interval '7 days'")
         report["expired"] = self._db.execute(
             "UPDATE watchers SET status = 'EXPIRED', paused_by = NULL, updated_at = now() "
             "WHERE status IN ('ARMED', 'PAUSED') AND expires_at < now()"

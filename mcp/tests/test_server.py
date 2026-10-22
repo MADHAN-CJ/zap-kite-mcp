@@ -366,8 +366,15 @@ def test_token_expiry_marks_connection_and_pauses_watchers(h: Harness) -> None:
     listed = json.loads(mcp.tool("list_watchers")[0])["watchers"]
     assert listed[0]["status"] == "PAUSED" and listed[0]["pausedBy"] == "broker"
 
+    h.app.db.execute(
+        "INSERT INTO otps (email, code_hash, expires_at) VALUES ('old@example.com', 'x', now() - interval '8 days'), "
+        "('new@example.com', 'y', now() + interval '5 minutes')"
+    )
     report = sweep(h)
     assert report["expiryMails"] == 1
+    assert [r["email"] for r in h.app.db.query("SELECT email FROM otps ORDER BY email")] == [
+        "new@example.com"
+    ]
     assert h.app.mailer.sent[-1]["subject"].startswith("/markets watchers paused")
     assert sweep(h)["expiryMails"] == 0
 
