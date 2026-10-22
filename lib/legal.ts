@@ -7,7 +7,8 @@ export const legal = {
   spokenName: "Slash Markets",
   companyName: "Certus Innovations Private Limited",
   companyType: "a private limited company incorporated in India",
-  registeredAddress: "412 2nd, 3rd, and 4th Floors, Duru House, Juhu Tara Road (Next to JW Marriott), Juhu, Vile Parle West, Mumbai, Maharashtra 400049",
+  registeredAddress:
+    "412 2nd, 3rd, and 4th Floors, Duru House, Juhu Tara Road (Next to JW Marriott), Juhu, Vile Parle West, Mumbai, Maharashtra 400049",
   supportEmail: "support@revise.network",
   privacyEmail: "support@revise.network",
   grievanceOfficer: "Mehul Parmar",
