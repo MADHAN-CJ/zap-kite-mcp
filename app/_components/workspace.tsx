@@ -15,6 +15,7 @@ import {
 import { clearSession, getUser, isLoggedIn } from "@/lib/client/session";
 import { BrokerCard } from "./broker-card";
 import { Login } from "./login";
+import { SiteFooter } from "./site-footer";
 import { WatchCard } from "./watch-card";
 
 const LIVE = new Set(["ARMED", "PAUSED", "ERROR"]);
@@ -147,6 +148,8 @@ export function Workspace() {
             </>
           ) : null}
         </section>
+
+        <SiteFooter />
       </div>
     </main>
   );

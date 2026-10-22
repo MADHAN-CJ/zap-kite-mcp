@@ -1,11 +1,13 @@
 "use client";
 
 import { Loader2Icon } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { Logomark, MarketsLabel, Wordmark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { requestOtp, verifyOtp } from "@/lib/client/api";
+import { SiteFooter } from "./site-footer";
 
 export function Login({ onLoggedIn }: { readonly onLoggedIn: () => void }) {
   const [step, setStep] = useState<"email" | "code">("email");
@@ -118,6 +120,19 @@ export function Login({ onLoggedIn }: { readonly onLoggedIn: () => void }) {
             {error}
           </p>
         ) : null}
+
+        <p className="text-center text-muted-foreground text-sm">
+          By continuing you agree to the{" "}
+          <Link className="underline underline-offset-4 hover:text-foreground" href="/terms">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link className="underline underline-offset-4 hover:text-foreground" href="/privacy">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+        <SiteFooter compact />
       </div>
     </main>
   );
