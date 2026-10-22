@@ -14,11 +14,11 @@ import { mutateWatch, type WatchAction, type WatchSummary } from "@/lib/client/a
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLE: Record<string, string> = {
-  ARMED: "bg-emerald-600/10 text-emerald-700",
-  PAUSED: "bg-amber-500/10 text-amber-700",
-  ERROR: "bg-red-600/10 text-red-700",
-  EXPIRED: "bg-muted text-muted-foreground",
-  CANCELLED: "bg-muted text-muted-foreground",
+  ARMED: "bg-positive-surface text-positive",
+  PAUSED: "bg-select text-warning",
+  ERROR: "bg-negative-surface text-negative",
+  EXPIRED: "bg-surface text-muted-foreground",
+  CANCELLED: "bg-surface text-muted-foreground",
 };
 
 const timeAgo = (iso: string | null): string | null => {
@@ -35,6 +35,15 @@ const statusLabel = (w: WatchSummary): string => {
   if (w.status === "PAUSED" && w.pausedBy === "broker") return "paused · session";
   return w.status.toLowerCase();
 };
+
+const when = (iso: string) =>
+  new Date(iso).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  });
 
 export function WatchCard({
   watch,
@@ -66,10 +75,10 @@ export function WatchCard({
     watch.status === "ERROR" || watch.pausedBy === "broker" ? watch.statusReason : null;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm">
+    <div className="flex flex-col gap-2 rounded-2xl border bg-card p-4">
       <div className="flex items-center gap-2">
         <RadarIcon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate font-medium">
+        <span className="min-w-0 flex-1 truncate font-medium text-lg">
           {watch.symbol}{" "}
           <span className="font-normal text-muted-foreground">
             · {watch.market} · every {watch.checkEveryMinutes} min
@@ -77,16 +86,16 @@ export function WatchCard({
         </span>
         <span
           className={cn(
-            "rounded-full px-2 py-0.5 font-medium text-xs",
-            STATUS_STYLE[watch.status] ?? "bg-muted",
+            "rounded-full px-3 py-1 font-medium text-sm",
+            STATUS_STYLE[watch.status] ?? "bg-surface",
           )}
         >
           {statusLabel(watch)}
         </span>
       </div>
       <p className="text-muted-foreground">{watch.label}</p>
-      {reason ? <p className="text-red-700 text-xs">{reason}</p> : null}
-      <p className="text-muted-foreground/70 text-xs">
+      {reason ? <p className="text-negative text-sm">{reason}</p> : null}
+      <p className="font-mono text-[14px] text-muted-foreground">
         {checked ? `checked ${checked}` : "not checked yet"}
         {watch.lastValue !== null ? ` · value ${watch.lastValue}` : ""}
         {watch.lastDetail ? ` · ${watch.lastDetail}` : ""}
@@ -94,23 +103,16 @@ export function WatchCard({
         {` · expires ${new Date(watch.expiresAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}`}
       </p>
       {watch.recentAlerts.length > 0 ? (
-        <ul className="text-muted-foreground text-xs">
+        <ul className="text-muted-foreground text-sm">
           {watch.recentAlerts.map((a) => (
             <li key={a.at}>
-              ⚡{" "}
-              {new Date(a.at).toLocaleString("en-IN", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "Asia/Kolkata",
-              })}
+              ⚡ {when(a.at)}
               {a.value !== null ? ` · ${a.value}` : ""}
             </li>
           ))}
         </ul>
       ) : null}
-      {error ? <p className="text-red-700 text-xs">{error}</p> : null}
+      {error ? <p className="text-negative text-sm">{error}</p> : null}
       {live ? (
         <div className="flex items-center gap-2">
           {watch.status === "ARMED" ? (
@@ -136,7 +138,7 @@ export function WatchCard({
             disabled={busy !== null}
             onClick={() => setConfirmCancelOpen(true)}
             size="xs"
-            variant="ghost"
+            variant="destructive"
           >
             {busy === "cancel" ? "Cancelling…" : "Cancel"}
           </Button>
@@ -153,17 +155,22 @@ export function WatchCard({
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setConfirmCancelOpen(false)} type="button" variant="ghost">
+            <Button
+              onClick={() => setConfirmCancelOpen(false)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
               Keep watching
             </Button>
             <Button
-              className="text-destructive hover:text-destructive"
               onClick={() => {
                 setConfirmCancelOpen(false);
                 void act("cancel");
               }}
+              size="sm"
               type="button"
-              variant="ghost"
+              variant="destructive"
             >
               Cancel watcher
             </Button>

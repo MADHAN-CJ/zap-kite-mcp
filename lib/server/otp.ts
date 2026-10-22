@@ -2,6 +2,7 @@ import { HttpError } from "./auth";
 import { otpHash } from "./crypto";
 import { execute, one, query } from "./db";
 import { sendEmail } from "./email";
+import { loginCodeEmail } from "./emails";
 
 const OTP_TTL_S = 600;
 const OTP_COOLDOWN_S = 45;
@@ -29,11 +30,7 @@ export async function requestOtp(rawEmail: string): Promise<void> {
     "INSERT INTO otps (email, code_hash, expires_at) VALUES ($1, $2, now() + make_interval(secs => $3))",
     [email, otpHash(code, email), OTP_TTL_S],
   );
-  const ok = await sendEmail(
-    email,
-    `${code} is your Slash Markets login code`,
-    `Your Slash Markets login code is ${code}. It expires in 10 minutes.\n\nIf you didn't request it, ignore this email.`,
-  );
+  const ok = await sendEmail(email, loginCodeEmail(code));
   if (!ok) throw new HttpError(502, "Could not send the login code. Try again in a moment.");
 }
 
