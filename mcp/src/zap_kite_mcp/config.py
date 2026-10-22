@@ -96,7 +96,7 @@ def load_settings() -> Settings:
         session_secret=_secret("SESSION_SECRET"),
         creds_encryption_key=_secret("CREDS_ENCRYPTION_KEY"),
         resend_api_key=_env("RESEND_API_KEY"),
-        email_from=_env("EMAIL_FROM") or "Slash Markets <no-reply@example.com>",
+        email_from=_env("EMAIL_FROM") or "/markets <no-reply@example.com>",
         sweep_secret=_env("SWEEP_SECRET"),
         sweep_interval_s=_int("SWEEP_INTERVAL_SECONDS", 60),
         state_dir=state_dir,

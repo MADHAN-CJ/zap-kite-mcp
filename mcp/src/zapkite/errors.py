@@ -52,7 +52,7 @@ def classify(status: int, payload: Any, fallback: str) -> KiteError:
     if error_type == "TokenException" or (status in (401, 403) and not error_type):
         return TokenExpired(
             "Kite access token is invalid or expired. The user must log in to Zerodha again "
-            "from the Slash Markets web app; nothing in this script can refresh it.",
+            "from the /markets web app; nothing in this script can refresh it.",
             status,
             error_type,
             payload,

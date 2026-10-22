@@ -1,31 +1,21 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 import "./globals.css";
 
-const sans = Geist({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: "variable",
-  display: "swap",
-});
-const mono = Geist_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: "variable",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "Slash Markets",
+  title: "/markets · Your AI, connected to the market",
   description:
-    "Connect Zerodha to Claude and manage market watchers. Read-only: it can never trade.",
+    "Connect Zerodha to Claude and manage market watchers. Read-only: /markets can never trade.",
+  robots: { index: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
-    <html className={cn(sans.variable, mono.variable)} lang="en">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

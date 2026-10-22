@@ -6,7 +6,9 @@ import secrets
 from .config import Settings
 from .crypto import otp_hash
 from .db import Database
+from .emails import login_code
 from .mail import Mailer
+from .pages import LOGOMARK_PATHS
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 OTP_TTL_S = 600
@@ -46,12 +48,7 @@ class Identity:
             "VALUES (%s, %s, now() + make_interval(secs => %s))",
             (email, otp_hash(self._settings.session_secret, code, email), OTP_TTL_S),
         )
-        ok = self._mailer.send(
-            email,
-            f"{code} is your Slash Markets login code",
-            f"Your Slash Markets login code is {code}. It expires in 10 minutes.\n\n"
-            "If you didn't request it, ignore this email.",
-        )
+        ok = self._mailer.send(email, login_code(code, LOGOMARK_PATHS))
         if not ok:
             raise IdentityError("Could not send the login code. Try again in a moment.")
 

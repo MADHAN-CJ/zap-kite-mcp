@@ -78,6 +78,6 @@ export async function disconnect(userId: string): Promise<void> {
   await execute(
     "UPDATE watchers SET status = 'PAUSED', paused_by = 'broker', status_reason = $2, updated_at = now() " +
       "WHERE user_id = $1 AND status = 'ARMED'",
-    [userId, "Zerodha is disconnected. Log in again in the Slash Markets app, then resume."],
+    [userId, "Zerodha is disconnected. Log in again in the /markets app, then resume."],
   );
 }
