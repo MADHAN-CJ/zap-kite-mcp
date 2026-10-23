@@ -1,0 +1,31 @@
+{
+  "name": "slash-markets",
+  "displayName": "/markets",
+  "version": "0.1.0",
+  "description": "Read-only Zerodha account and Indian market analysis inside Claude: positions, holdings, funds, NSE/BSE/NFO/BFO/MCX/CDS prices and candles, derived option chains with greeks, indicators, and e-mail watchers. Never places orders.",
+  "author": {
+    "name": "Certus Innovations Private Limited",
+    "email": "support@revise.network",
+    "url": "https://slash.markets"
+  },
+  "homepage": "https://slash.markets",
+  "repository": "https://github.com/MADHAN-CJ/zap-kite-mcp",
+  "license": "MIT",
+  "keywords": [
+    "zerodha",
+    "kite",
+    "nse",
+    "bse",
+    "mcx",
+    "options",
+    "stocks",
+    "india",
+    "trading",
+    "market-data"
+  ],
+  "icon": "./icon.png",
+  "documentationUrl": "https://github.com/MADHAN-CJ/zap-kite-mcp#readme",
+  "supportUrl": "https://github.com/MADHAN-CJ/zap-kite-mcp/issues",
+  "privacyPolicyUrl": "https://app.slash.markets/privacy",
+  "termsOfServiceUrl": "https://app.slash.markets/terms"
+}
