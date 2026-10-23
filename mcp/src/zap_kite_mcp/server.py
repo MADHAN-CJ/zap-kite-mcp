@@ -18,6 +18,7 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
@@ -194,7 +195,13 @@ def build_server(app: App) -> MCPServer:
         access = get_access_token()
         return access.subject if access and access.subject else None
 
-    @server.tool(name="run_python", description=description, structured_output=False)
+    @server.tool(
+        name="run_python",
+        title="Run Python against Zerodha data",
+        description=description,
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
+        structured_output=False,
+    )
     async def run_python(code: str, timeout_seconds: int = 0) -> str:
         """code: the complete Python script. timeout_seconds: wall-clock limit (default 60, max 180)."""
         user_id = subject()
@@ -217,7 +224,13 @@ def build_server(app: App) -> MCPServer:
             raise ToolError(text)
         return text
 
-    @server.tool(name="auth_status", description=AUTH_STATUS_DESCRIPTION, structured_output=False)
+    @server.tool(
+        name="auth_status",
+        title="Zerodha connection status",
+        description=AUTH_STATUS_DESCRIPTION,
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
+        structured_output=False,
+    )
     async def auth_status() -> str:
         user_id = subject()
         if user_id is None:
@@ -239,7 +252,16 @@ def build_server(app: App) -> MCPServer:
         )
 
     @server.tool(
-        name="create_watcher", description=CREATE_WATCHER_DESCRIPTION, structured_output=False
+        name="create_watcher",
+        title="Create a market watcher",
+        description=CREATE_WATCHER_DESCRIPTION,
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=True,
+        ),
+        structured_output=False,
     )
     async def create_watcher(
         symbol: str,
@@ -266,7 +288,11 @@ def build_server(app: App) -> MCPServer:
         return result if isinstance(result, str) else json.dumps(result)
 
     @server.tool(
-        name="list_watchers", description=LIST_WATCHERS_DESCRIPTION, structured_output=False
+        name="list_watchers",
+        title="List market watchers",
+        description=LIST_WATCHERS_DESCRIPTION,
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
+        structured_output=False,
     )
     async def list_watchers() -> str:
         user_id = subject()

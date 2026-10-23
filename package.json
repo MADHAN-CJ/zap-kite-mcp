@@ -13,10 +13,10 @@
     "mcp": "uv run --directory mcp zap-kite-mcp",
     "mcp:check": "uv run --directory mcp ruff check . && uv run --directory mcp ruff format --check . && uv run --directory mcp mypy && uv run --directory mcp pytest",
     "mcp:smoke": "uv run --directory mcp python scripts/live_smoke.py",
-    "deploy": "ssh root@64.227.149.33 'bash /root/zap-kite-mcp-deploy/update.sh'",
-    "deploy:setup": "scp deploy/setup-uat.sh deploy/update.sh root@64.227.149.33:/root/zap-kite-mcp-deploy/ && ssh root@64.227.149.33 'bash /root/zap-kite-mcp-deploy/setup-uat.sh'",
-    "logs": "ssh root@64.227.149.33 'journalctl -u zap-kite-mcp -n 100 --no-pager -o cat'",
-    "status": "ssh root@64.227.149.33 'systemctl status zap-kite-mcp --no-pager; curl -fsS http://127.0.0.1:8019/health; echo'"
+    "deploy": "bash deploy/remote.sh deploy",
+    "deploy:setup": "bash deploy/remote.sh setup",
+    "logs": "bash deploy/remote.sh logs",
+    "status": "bash deploy/remote.sh status"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",

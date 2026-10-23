@@ -59,8 +59,10 @@ connector runs the OAuth flow with the same email sign-in.
 
 Python server: `deploy/` holds a hardened systemd unit, an nginx snippet (including the
 root-level OAuth discovery routes a path-scoped issuer needs), a one-time `setup-uat.sh` and
-`update.sh`. `package.json` wraps them: `npm run deploy:setup` once, then `npm run deploy` after
-every push to `dev`; `npm run status` and `npm run logs` for operations.
+`update.sh`. `package.json` wraps them through `deploy/remote.sh`, which reads the box address from
+`DEPLOY_HOST` (for example `root@203.0.113.10`) or the git-ignored file `deploy/.host`:
+`npm run deploy:setup` once, then `npm run deploy` after every push to `dev`; `npm run status`
+and `npm run logs` for operations.
 
 Web app: import the repository into Vercel (root directory = repository root), add the web
 variables from `.env.example`, and point the Kite app's redirect URL at `https://<domain>/api/broker/kite/callback`.
@@ -89,7 +91,7 @@ The `dev` branch is the staging source for both services. Vercel deploys it to
 
 - App and its `/api/*` routes: `https://staging-kite-app.slash.markets`.
   Add this project domain with Preview branch `dev`; use Vercel's returned DNS target.
-- MCP connector: `https://staging-kite-mcp.slash.markets/` on UAT `64.227.149.33`.
+- MCP connector: `https://staging-kite-mcp.slash.markets/` on the staging box.
   `deploy/staging-nginx.conf` is a separate nginx site; obtain its TLS certificate with
   Certbot before enabling the HTTPS block. Preserve the existing UAT site.
 - Vercel Preview `NEXT_PUBLIC_MCP_URL` must match the MCP connector URL. It is embedded

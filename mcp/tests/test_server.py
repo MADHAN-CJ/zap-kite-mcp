@@ -244,7 +244,11 @@ class Mcp:
         return text, bool(res.get("isError"))
 
     def tools(self) -> list[str]:
-        return [t["name"] for t in self.rpc("tools/list", {})["result"]["tools"]]
+        return [t["name"] for t in self.tool_specs()]
+
+    def tool_specs(self) -> list[dict[str, Any]]:
+        specs: list[dict[str, Any]] = self.rpc("tools/list", {})["result"]["tools"]
+        return specs
 
 
 def user_id_of(h: Harness, email: str = DEV_EMAIL) -> str:
@@ -294,6 +298,12 @@ def test_health_and_oauth_metadata(h: Harness) -> None:
 def test_oauth_login_and_tools_before_connecting(h: Harness) -> None:
     mcp = Mcp(h.base, oauth_login(h))
     assert mcp.tools() == ["run_python", "auth_status", "create_watcher", "list_watchers"]
+    for spec in mcp.tool_specs():
+        hints = spec["annotations"]
+        assert spec["title"] and len(spec["name"]) <= 64
+        assert hints.get("readOnlyHint") is True or hints.get("destructiveHint") is not None
+    read_only = {s["name"] for s in mcp.tool_specs() if s["annotations"].get("readOnlyHint")}
+    assert read_only == {"run_python", "auth_status", "list_watchers"}
     status = json.loads(mcp.tool("auth_status")[0])
     assert (
         status["signedIn"] and status["email"] == DEV_EMAIL and status["broker"] == "not_connected"
