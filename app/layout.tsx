@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "/markets · Your AI, connected to the market",
   description:
-    "Connect Zerodha to Claude and manage market watchers. Read-only: /markets can never trade.",
+    "Connect Zerodha to your AI assistant and manage market watchers. Read-only: /markets can never trade.",
   robots: { index: false },
 };
 

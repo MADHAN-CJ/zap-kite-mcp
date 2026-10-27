@@ -1,18 +1,19 @@
 # zap-kite-mcp
 
-An MCP server that gives Claude read-only access to a Zerodha Kite Connect account and to
-Indian market data through one `run_python` tool. Claude writes a Python script against the
-`zapkite` library, the server runs it in an isolated subprocess and returns only what the
-script printed, so large data never enters the model's context. The same server hosts
-market watchers (Claude-authored conditions checked on a schedule without AI tokens, emailed
-when they become true) and a small web app where users log in to Zerodha and manage watchers.
+An MCP server that gives an AI assistant (Claude or ChatGPT) read-only access to a Zerodha Kite
+Connect account and to Indian market data through one `run_python` tool. The model writes a
+Python script against the `zapkite` library, the server runs it in an isolated subprocess and
+returns only what the script printed, so large data never enters the model's context. The same
+server hosts market watchers (model-authored conditions checked on a schedule without AI tokens,
+emailed when they become true) and a small web app where users log in to Zerodha and manage
+watchers.
 
 ## How it fits together
 
 | Piece | What it does |
 |---|---|
-| `mcp/src/zapkite` | Library Claude's scripts import: account reads, quotes, candles, instruments, a derived option chain with Black-76 greeks, indicators, market hours. Read-only by construction. |
-| `mcp/src/zap_kite_mcp` | MCP server (Streamable HTTP, OAuth 2.1 authorization + resource server with dynamic client registration and PKCE), tools `run_python`, `auth_status`, `create_watcher`, `list_watchers`. |
+| `mcp/src/zapkite` | Library the model's scripts import: account reads, quotes, candles, instruments, a derived option chain with Black-76 greeks, indicators, market hours. Read-only by construction. |
+| `mcp/src/zap_kite_mcp` | MCP server (Streamable HTTP, OAuth 2.1 authorization + resource server with dynamic client registration, Client ID Metadata Documents, PKCE, RFC 8707 resource binding, RFC 9207 `iss`, UserInfo), tools `run_python`, `auth_status`, `profile`, `create_watcher`, `list_watchers`. |
 | Gateway | Local `GET /kite/...` endpoint. Scripts hold only a per-run token; the gateway injects the user's Kite access token, allows read endpoints only and applies Kite's per-app rate limits. |
 | Runner | Spawns `python -I` per script with a scrubbed environment, wall-clock timeout, output cap and a per-user workspace that persists between calls. |
 | Watchers | Postgres-backed sweeper: baseline on first check, one alert per not-met→met transition, market-hours gate per exchange, pause when the Kite session ends and auto-resume after the next login. |
@@ -43,14 +44,16 @@ npm run mcp                     # Python server: migrates the database, serves h
 `npm run mcp` is `uv run --directory mcp zap-kite-mcp`; the Python project lives in `mcp/`
 with its own `pyproject.toml` and `uv.lock`.
 
-Give Claude [`mcp/SKILL.md`](mcp/SKILL.md): it is the document that teaches the model how to write
+Give the model [`mcp/SKILL.md`](mcp/SKILL.md): it is the document that teaches it how to write
 scripts against `zapkite` (one composed script per question, return shapes, Kite quirks,
 watcher contract). The tool description carries only a short reference.
 
 Set `DEV_LOGIN_EMAIL` and `DEV_LOGIN_CODE` in `.env` to sign in without email while
 developing. Open the web app, sign in, click "Log in to Zerodha". Add the MCP to claude.ai as a
-custom connector with URL `http://127.0.0.1:8019/` (a public HTTPS URL in production); the
-connector runs the OAuth flow with the same email sign-in.
+custom connector, or to ChatGPT (Plugins → Add custom MCP server, OAuth), with URL
+`http://127.0.0.1:8019/` (a public HTTPS URL in production); both hosts run the OAuth flow with
+the same email sign-in. ChatGPT registers through its Client ID Metadata Document, Claude through
+dynamic client registration.
 
 `mcp/scripts/kite_login.py` obtains a Kite access token without the web app and
 `npm run mcp:smoke` exercises the library against the real API with it.

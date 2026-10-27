@@ -151,7 +151,7 @@ def session_paused(page_url: str, logomark_paths: str = "") -> Email:
     body = (
         _p(
             "Zerodha ends every session during its overnight reset, so your /markets watchers "
-            "are paused and Claude can't read your account until you log in again."
+            "are paused and your AI assistant can't read your account until you log in again."
         )
         + _p(_button("Log in to Zerodha", page_url))
         + _muted("Watchers resume by themselves after you log in. Nothing else to do.")

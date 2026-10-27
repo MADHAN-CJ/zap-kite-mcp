@@ -23,6 +23,9 @@ export function SiteFooter({ compact = false }: { readonly compact?: boolean }) 
         <Link className="hover:text-foreground hover:underline" href="/privacy">
           Privacy
         </Link>
+        <Link className="hover:text-foreground hover:underline" href="/support">
+          Support
+        </Link>
         <a className="hover:text-foreground hover:underline" href={legal.marketingUrl}>
           slash.markets
         </a>

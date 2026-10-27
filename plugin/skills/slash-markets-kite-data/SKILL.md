@@ -259,8 +259,11 @@ NSE), so keep it to one or two calls and resolve keys now, hard-coding them. Its
 once at creation and rejected if the output breaks that contract. The first check
 is a baseline and never alerts; one e-mail per not-met→met transition, at most
 every 15 minutes. When the Zerodha session ends, watchers pause and resume by
-themselves after the next login. You cannot pause, resume or cancel: always show
-the user the returned `pageUrl`.
+themselves after the next login. The tool returns `{"created": true, "watcher":
+{...}}` with the watcher's `id`, dry-run result and `pageUrl`, or `{"created":
+false, "error": "..."}` when the dry run or an argument was rejected (fix and
+retry). You cannot pause, resume or cancel: always show the user the returned
+`pageUrl`.
 
 ```python
 # "e-mail me when NIFTY 15m RSI drops under 30"
