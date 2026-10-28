@@ -77,10 +77,10 @@ export function BrokerCard({
   const note = {
     active: `Zerodha ends every session during its overnight reset, usually between 05:30 and 07:30 IST. This one likely ends by ${fmt(status?.expiresAt ?? null) ?? "tomorrow morning"}.`,
     token_expired:
-      "Zerodha ended the daily session. Log in again to resume Claude access and watchers.",
-    disconnected: "Log in to Zerodha to let Claude read this account.",
+      "Zerodha ended the daily session. Log in again to resume AI access and watchers.",
+    disconnected: "Log in to Zerodha to let your AI assistant read this account.",
     not_connected:
-      "Log in to Zerodha to let Claude read this account. /markets never places orders.",
+      "Log in to Zerodha to let your AI assistant read this account. /markets never places orders.",
   }[state];
 
   return (
@@ -119,7 +119,7 @@ export function BrokerCard({
           <DialogHeader>
             <DialogTitle>Disconnect Zerodha</DialogTitle>
             <DialogDescription>
-              Claude loses access and your watchers pause until you log in again.
+              Your AI assistant loses access and your watchers pause until you log in again.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">

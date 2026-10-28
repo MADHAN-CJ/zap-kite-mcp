@@ -1,0 +1,35 @@
+[Unit]
+Description=Slash Markets Kite MCP (production)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=zapkiteprod
+Group=zapkiteprod
+WorkingDirectory=/opt/zap-kite-mcp-prod/mcp
+EnvironmentFile=/opt/zap-kite-mcp-prod/.env
+Environment=HOME=/var/lib/zapkiteprod
+ExecStartPre=/opt/zap-kite-mcp-prod/mcp/.venv/bin/python -m zap_kite_mcp.sandbox
+ExecStart=/opt/zap-kite-mcp-prod/mcp/.venv/bin/zap-kite-mcp
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+InaccessiblePaths=-/var/www -/etc/nginx -/etc/letsencrypt -/opt/zap-claude-mcp -/opt/zap-eve-mcp
+ReadWritePaths=/var/lib/zapkiteprod
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+MemoryMax=1G
+CPUQuota=200%
+TasksMax=256
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

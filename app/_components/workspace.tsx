@@ -75,7 +75,9 @@ export function Workspace() {
     const err = params.get("error");
     if (!connected && !err) return;
     setNotice(
-      connected ? "Zerodha connected. Claude can read this account until the session ends." : null,
+      connected
+        ? "Zerodha connected. Your AI assistant can read this account until the session ends."
+        : null,
     );
     setError(err);
     router.replace("/");
@@ -113,7 +115,7 @@ export function Workspace() {
 
         {MCP_URL ? (
           <p className="text-muted-foreground text-sm">
-            Add <MarketsLabel /> to Claude as a connector with{" "}
+            Add <MarketsLabel /> to Claude or ChatGPT as a connector with{" "}
             <code className="font-mono text-[15px]">{MCP_URL}</code>
           </p>
         ) : null}
@@ -125,13 +127,13 @@ export function Workspace() {
             </h2>
             <p className="text-muted-foreground">
               Checks your AI set up for you. They run during market hours and email you when a
-              condition becomes true. Ask Claude to create one.
+              condition becomes true. Ask your AI assistant to create one.
             </p>
           </div>
           {watches === null && !error ? <p className="text-muted-foreground">Loading…</p> : null}
           {watches !== null && watches.length === 0 ? (
             <p className="rounded-xl bg-surface px-4 py-6 text-center text-muted-foreground">
-              No watchers yet. Ask Claude: “Alert me when NIFTY crosses 25,000.”
+              No watchers yet. Ask your AI: “Alert me when NIFTY crosses 25,000.”
             </p>
           ) : null}
           {live.map((w) => (

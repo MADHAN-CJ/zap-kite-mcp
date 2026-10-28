@@ -7,6 +7,7 @@ import logging
 import os
 import secrets
 import socket
+import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -28,6 +29,28 @@ TEST_DB = os.environ.get(
     "ZAP_KITE_MCP_TEST_DATABASE_URL", "postgresql://localhost/zap_kite_mcp_test"
 )
 DEV_EMAIL, DEV_CODE = "dev@example.com", "123456"
+CHALLENGE_TOKEN = "openai-apps-challenge-token"
+CIMD_CLIENT_ID = "https://client.example/oauth/client.json"
+CIMD_REDIRECT = "https://client.example/cb"
+
+
+def _cimd_documents(request: httpx.Request) -> httpx.Response:
+    if str(request.url) != CIMD_CLIENT_ID:
+        return httpx.Response(404)
+    return httpx.Response(
+        200,
+        json={
+            "client_id": CIMD_CLIENT_ID,
+            "client_name": "Fake host",
+            "redirect_uris": [CIMD_REDIRECT],
+            "token_endpoint_auth_method": "private_key_jwt",
+            "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+        },
+    )
+
+
 TABLES = (
     "watcher_fires",
     "watchers",
@@ -81,19 +104,19 @@ class Harness:
             "WATCHERS_MIN_GAP_MINUTES": "0",
             "ZAPKITE_TODAY": TODAY.isoformat(),
             "RESEND_API_KEY": "",
+            "SCRIPT_TIMEOUT_OPENAI_SECONDS": "1",
+            "OPENAI_APPS_CHALLENGE_TOKEN": CHALLENGE_TOKEN,
         }
         self._old = {k: os.environ.get(k) for k in env}
         os.environ.update(env)
         self.settings = load_settings()
-        self.app = srv.build_app(self.settings, kite_transport=self.fake.transport())
-        mcp = srv.build_server(self.app)
-        asgi = mcp.streamable_http_app(
-            streamable_http_path="/",
-            stateless_http=True,
-            json_response=True,
-            transport_security=srv.transport_security(self.settings),
-            host=self.settings.host,
+        self.app = srv.build_app(
+            self.settings,
+            kite_transport=self.fake.transport(),
+            cimd_transport=httpx.MockTransport(_cimd_documents),
         )
+        mcp = srv.build_server(self.app)
+        asgi = srv.build_asgi(mcp, self.settings)
         for name in ("mcp", "uvicorn", "zap_kite_mcp"):
             logging.getLogger(name).setLevel(logging.WARNING)
         self._server = uvicorn.Server(
@@ -182,7 +205,7 @@ def oauth_tokens(h: Harness, email: str = DEV_EMAIL) -> dict[str, Any]:
     assert auth.status_code == 302, auth.text
     login_url = auth.headers["location"]
     txn = parse_qs(urlparse(login_url).query)["txn"][0]
-    assert "Connect Claude" in web.get(login_url).text
+    assert "Connect your AI assistant" in web.get(login_url).text
     r = web.post("/login/email", data={"txn": txn, "email": email})
     assert r.status_code == 200 and "login code" in r.text
     r = web.post("/login/otp", data={"txn": txn, "code": DEV_CODE})
@@ -239,12 +262,25 @@ class Mcp:
         return body
 
     def tool(self, name: str, **args: Any) -> tuple[str, bool]:
-        res = self.rpc("tools/call", {"name": name, "arguments": args})["result"]
+        res = self.call(name, args)
         text = "".join(c.get("text", "") for c in res.get("content", []))
         return text, bool(res.get("isError"))
 
+    def call(
+        self, name: str, args: dict[str, Any], meta: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"name": name, "arguments": args}
+        if meta is not None:
+            params["_meta"] = meta
+        result: dict[str, Any] = self.rpc("tools/call", params)["result"]
+        return result
+
     def tools(self) -> list[str]:
-        return [t["name"] for t in self.rpc("tools/list", {})["result"]["tools"]]
+        return [t["name"] for t in self.tool_specs()]
+
+    def tool_specs(self) -> list[dict[str, Any]]:
+        specs: list[dict[str, Any]] = self.rpc("tools/list", {})["result"]["tools"]
+        return specs
 
 
 def user_id_of(h: Harness, email: str = DEV_EMAIL) -> str:
@@ -293,7 +329,19 @@ def test_health_and_oauth_metadata(h: Harness) -> None:
 
 def test_oauth_login_and_tools_before_connecting(h: Harness) -> None:
     mcp = Mcp(h.base, oauth_login(h))
-    assert mcp.tools() == ["run_python", "auth_status", "create_watcher", "list_watchers"]
+    assert mcp.tools() == [
+        "run_python",
+        "auth_status",
+        "profile",
+        "create_watcher",
+        "list_watchers",
+    ]
+    for spec in mcp.tool_specs():
+        hints = spec["annotations"]
+        assert spec["title"] and len(spec["name"]) <= 64
+        assert hints.get("readOnlyHint") is True or hints.get("destructiveHint") is not None
+    read_only = {s["name"] for s in mcp.tool_specs() if s["annotations"].get("readOnlyHint")}
+    assert read_only == {"auth_status", "profile", "list_watchers"}
     status = json.loads(mcp.tool("auth_status")[0])
     assert (
         status["signedIn"] and status["email"] == DEV_EMAIL and status["broker"] == "not_connected"
@@ -304,9 +352,10 @@ def test_oauth_login_and_tools_before_connecting(h: Harness) -> None:
     text, _ = mcp.tool(
         "create_watcher", symbol="TCS", label="x", script="print('{\"met\": false}')"
     )
-    assert "not connected" in text
+    assert "not connected" in text and json.loads(text)["created"] is False
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Script execution requires Linux sandbox")
 def test_kite_connect_and_run_python_through_gateway(h: Harness) -> None:
     connect_kite(h)
     mcp = Mcp(h.base, oauth_login(h))
@@ -347,6 +396,7 @@ def test_gateway_rejects_bad_tokens_and_writes(h: Harness) -> None:
     assert r.status_code == 403 and "not a read endpoint" in r.text
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Script execution requires Linux sandbox")
 def test_token_expiry_marks_connection_and_pauses_watchers(h: Harness) -> None:
     connect_kite(h)
     mcp = Mcp(h.base, oauth_login(h))
@@ -356,7 +406,7 @@ def test_token_expiry_marks_connection_and_pauses_watchers(h: Harness) -> None:
         label="TCS above 3400",
         script="import zapkite as z, json\nltp=z.ltp_of('NSE:TCS')\nprint(json.dumps({'met': ltp > 3400, 'value': ltp}))",
     )
-    created = json.loads(text)
+    created = json.loads(text)["watcher"]
     assert created["status"] == "ARMED" and created["alreadyMet"] is True
 
     h.fake.token_valid = False
@@ -385,6 +435,7 @@ def test_token_expiry_marks_connection_and_pauses_watchers(h: Harness) -> None:
     assert json.loads(mcp.tool("auth_status")[0])["broker"] == "active"
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Script execution requires Linux sandbox")
 def test_watcher_lifecycle(h: Harness) -> None:
     connect_kite(h)
     mcp = Mcp(h.base, oauth_login(h))
@@ -394,7 +445,7 @@ def test_watcher_lifecycle(h: Harness) -> None:
         "print(json.dumps({'met': ltp > 1600, 'value': ltp, 'detail': 'infy'}))"
     )
     bad, _ = mcp.tool("create_watcher", symbol="INFY", label="bad", script="print('hello')")
-    assert bad.startswith("Watcher NOT created")
+    assert json.loads(bad)["error"].startswith("Watcher NOT created")
     text, _ = mcp.tool(
         "create_watcher",
         symbol="INFY",
@@ -402,7 +453,7 @@ def test_watcher_lifecycle(h: Harness) -> None:
         script=script,
         check_every_minutes=1,
     )
-    w = json.loads(text)
+    w = json.loads(text)["watcher"]
     assert w["status"] == "ARMED" and w["alreadyMet"] is False and w["market"] == "NSE"
     assert w["pageUrl"] == "https://web.example"
     wid = w["id"]
@@ -413,7 +464,8 @@ def test_watcher_lifecycle(h: Harness) -> None:
         label="gold",
         script="import json, zapkite as z\nprint(json.dumps({'met': z.ltp_of('MCX:GOLD25DECFUT') > 1}))",
     )
-    assert json.loads(gold)["market"] == "MCX" and json.loads(gold)["alreadyMet"] is True
+    gold_w = json.loads(gold)["watcher"]
+    assert gold_w["market"] == "MCX" and gold_w["alreadyMet"] is True
 
     h.app.db.execute("UPDATE watchers SET last_checked_at = now() - interval '1 hour'")
     report = sweep(h)
@@ -525,3 +577,217 @@ def test_consent_pages_carry_the_brand(h: Harness) -> None:
     assert '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 341 174"' in page
     assert 'class="slash"' in page and "markets" in page
     assert "Slash Markets" not in page and "Zap" not in page
+
+
+# ---------------------------------------------------------------- ChatGPT host support
+
+
+def _authorize(
+    web: httpx.Client, client_id: str, redirect_uri: str, challenge: str, **extra: str
+) -> httpx.Response:
+    return web.get(
+        "/authorize",
+        params={
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "state": "st",
+            "scope": "kite:read",
+            **extra,
+        },
+    )
+
+
+def _login(web: httpx.Client, auth: httpx.Response) -> dict[str, list[str]]:
+    assert auth.status_code == 302, auth.text
+    txn = parse_qs(urlparse(auth.headers["location"]).query)["txn"][0]
+    assert web.post("/login/email", data={"txn": txn, "email": DEV_EMAIL}).status_code == 200
+    r = web.post("/login/otp", data={"txn": txn, "code": DEV_CODE})
+    assert r.status_code == 302, r.text
+    return parse_qs(urlparse(r.headers["location"]).query)
+
+
+def test_metadata_advertises_chatgpt_requirements(h: Harness) -> None:
+    meta = httpx.get(f"{h.base}/.well-known/oauth-authorization-server").json()
+    assert meta["code_challenge_methods_supported"] == ["S256"]
+    assert meta["client_id_metadata_document_supported"] is True
+    assert meta["authorization_response_iss_parameter_supported"] is True
+    assert "none" in meta["token_endpoint_auth_methods_supported"]
+    assert meta["userinfo_endpoint"] == f"{h.base}/userinfo"
+    assert {"kite:read", "openid", "email"} <= set(meta["scopes_supported"])
+    assert meta["registration_endpoint"] == f"{h.base}/register"
+    r = httpx.get(f"{h.base}/.well-known/openai-apps-challenge")
+    assert r.status_code == 200 and r.text == CHALLENGE_TOKEN
+    assert r.headers["content-type"].startswith("text/plain")
+
+
+def test_cimd_client_login_with_iss_and_resource_binding(h: Harness) -> None:
+    web = httpx.Client(base_url=h.base, follow_redirects=False, timeout=10)
+    verifier, challenge = _pkce()
+    q = _login(
+        web, _authorize(web, CIMD_CLIENT_ID, CIMD_REDIRECT, challenge, resource=f"{h.base}/")
+    )
+    assert q["state"] == ["st"] and q["iss"] == [h.base]
+    tok = web.post(
+        "/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": q["code"][0],
+            "redirect_uri": CIMD_REDIRECT,
+            "client_id": CIMD_CLIENT_ID,
+            "code_verifier": verifier,
+            "resource": f"{h.base}/",
+        },
+    )
+    assert tok.status_code == 200, tok.text
+    mcp = Mcp(h.base, tok.json()["access_token"])
+    assert json.loads(mcp.tool("auth_status")[0])["signedIn"] is True
+    # Only the client's own redirect URI from the document is accepted.
+    bad = _authorize(web, CIMD_CLIENT_ID, "https://evil.example/cb", challenge)
+    assert bad.status_code == 400
+    # Unknown CIMD hosts are rejected, and plain ids never trigger a fetch.
+    assert (
+        _authorize(web, "https://nowhere.example/c.json", CIMD_REDIRECT, challenge).status_code
+        == 400
+    )
+    assert _authorize(web, "not-a-client", CIMD_REDIRECT, challenge).status_code == 400
+    # Error redirects back to the client carry `iss` too (RFC 9207).
+    err = _authorize(web, CIMD_CLIENT_ID, CIMD_REDIRECT, challenge, scope="bogus")
+    assert err.status_code == 302
+    eq = parse_qs(urlparse(err.headers["location"]).query)
+    assert eq["error"] == ["invalid_scope"] and eq["iss"] == [h.base] and eq["state"] == ["st"]
+    # A token issued for another resource is not accepted here (RFC 8707 audience binding).
+    verifier, challenge = _pkce()
+    q = _login(
+        web,
+        _authorize(
+            web, CIMD_CLIENT_ID, CIMD_REDIRECT, challenge, resource="https://other.example/mcp"
+        ),
+    )
+    tok = web.post(
+        "/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": q["code"][0],
+            "redirect_uri": CIMD_REDIRECT,
+            "client_id": CIMD_CLIENT_ID,
+            "code_verifier": verifier,
+        },
+    )
+    assert tok.status_code == 200, tok.text
+    r = httpx.post(
+        f"{h.base}/",
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+        headers={
+            "Authorization": f"Bearer {tok.json()['access_token']}",
+            "Accept": "application/json, text/event-stream",
+        },
+    )
+    assert r.status_code == 401
+
+
+def test_userinfo_endpoint(h: Harness) -> None:
+    token = oauth_login(h)
+    r = httpx.get(f"{h.base}/userinfo", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {"sub": user_id_of(h), "email": DEV_EMAIL, "email_verified": True}
+    r = httpx.post(f"{h.base}/userinfo")
+    assert r.status_code == 401 and r.headers["www-authenticate"].startswith("Bearer")
+
+
+def test_tool_specs_and_structured_results_for_chatgpt(h: Harness) -> None:
+    connect_kite(h)
+    mcp = Mcp(h.base, oauth_login(h))
+    specs = {t["name"]: t for t in mcp.tool_specs()}
+    for spec in specs.values():
+        hints = spec["annotations"]
+        for key in ("readOnlyHint", "destructiveHint", "openWorldHint"):
+            assert isinstance(hints.get(key), bool), (spec["name"], key)
+        assert spec["_meta"]["securitySchemes"] == [{"type": "oauth2", "scopes": ["kite:read"]}]
+    for name in ("auth_status", "profile", "create_watcher", "list_watchers"):
+        assert specs[name]["outputSchema"]["type"] == "object", name
+    assert "outputSchema" not in specs["run_python"]
+    # Inspect the actual tools/list response: clients use these hints for safeguards.
+    run_hints = specs["run_python"]["annotations"]
+    assert run_hints["readOnlyHint"] is False
+    assert run_hints["destructiveHint"] is True
+    assert run_hints["idempotentHint"] is False
+    assert run_hints["openWorldHint"] is False
+    profile = specs["profile"]
+    assert profile["_meta"]["openai/profile"] is True
+    assert profile["outputSchema"]["additionalProperties"] is False
+    assert profile["outputSchema"]["required"] == ["id"]
+    assert profile["inputSchema"].get("properties", {}) == {}
+
+    res = mcp.call("profile", {})
+    assert res["structuredContent"] == {
+        "id": user_id_of(h),
+        "name": "Test User",
+        "email": DEV_EMAIL,
+    }
+    assert json.loads(res["content"][0]["text"]) == res["structuredContent"]
+    res = mcp.call("auth_status", {})
+    assert (
+        res["structuredContent"]["signedIn"] is True
+        and res["structuredContent"]["broker"] == "active"
+    )
+    res = mcp.call("list_watchers", {})
+    assert res["structuredContent"]["watchers"] == [] and res["structuredContent"]["pageUrl"]
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Script execution requires Linux sandbox")
+def test_openai_host_gets_a_shorter_script_timeout(h: Harness) -> None:
+    connect_kite(h)
+    mcp = Mcp(h.base, oauth_login(h))
+    code = "import time\ntime.sleep(1.5)\nprint('done')"
+    res = mcp.call("run_python", {"code": code}, meta={"openai/userAgent": "ChatGPT/1.0"})
+    text = res["content"][0]["text"]
+    assert res.get("isError") and "timed out after 1s" in text, text
+    res = mcp.call("run_python", {"code": code}, meta={"progressToken": "p1"})
+    assert not res.get("isError") and "done" in res["content"][0]["text"]
+
+
+def test_existing_dcr_clients_may_request_new_scopes(h: Harness) -> None:
+    """A Claude connector registered with only kite:read must keep working whatever scope set it
+    requests now that openid/email are advertised, and a scope-less request still gets kite:read."""
+    web = httpx.Client(base_url=h.base, follow_redirects=False, timeout=10)
+    reg = web.post(
+        "/register",
+        json={"client_name": "old", "redirect_uris": [CIMD_REDIRECT], "scope": "kite:read"},
+    )
+    assert reg.status_code == 201 and reg.json()["scope"] == "kite:read"
+    client_id, secret = reg.json()["client_id"], reg.json()["client_secret"]
+    for requested in ("kite:read openid email", None):
+        verifier, challenge = _pkce()
+        extra = {"scope": requested} if requested else {}
+        auth = _authorize(web, client_id, CIMD_REDIRECT, challenge, **extra)
+        if requested is None:
+            auth = web.get(
+                "/authorize",
+                params={
+                    "response_type": "code",
+                    "client_id": client_id,
+                    "redirect_uri": CIMD_REDIRECT,
+                    "code_challenge": challenge,
+                    "code_challenge_method": "S256",
+                    "state": "st",
+                },
+            )
+        q = _login(web, auth)
+        tok = web.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": q["code"][0],
+                "redirect_uri": CIMD_REDIRECT,
+                "client_id": client_id,
+                "client_secret": secret,
+                "code_verifier": verifier,
+            },
+        )
+        assert tok.status_code == 200, tok.text
+        assert "kite:read" in tok.json()["scope"].split()
+        assert Mcp(h.base, tok.json()["access_token"]).tools()[0] == "run_python"

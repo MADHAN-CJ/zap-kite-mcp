@@ -151,7 +151,7 @@ export function WatchCard({
             <DialogTitle>Cancel this watcher</DialogTitle>
             <DialogDescription>
               Stop watching {watch.symbol} ({watch.label})? A cancelled watcher cannot be restarted;
-              ask Claude for a new one.
+              ask your AI assistant for a new one.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">

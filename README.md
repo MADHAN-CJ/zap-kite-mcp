@@ -1,18 +1,24 @@
 # zap-kite-mcp
 
-An MCP server that gives Claude read-only access to a Zerodha Kite Connect account and to
-Indian market data through one `run_python` tool. Claude writes a Python script against the
-`zapkite` library, the server runs it in an isolated subprocess and returns only what the
-script printed, so large data never enters the model's context. The same server hosts
-market watchers (Claude-authored conditions checked on a schedule without AI tokens, emailed
-when they become true) and a small web app where users log in to Zerodha and manage watchers.
+An MCP server that gives an AI assistant (Claude or ChatGPT) read-only access to a Zerodha Kite
+Connect account and to Indian market data through one `run_python` tool. The model writes a
+Python script against the `zapkite` library, the server runs it in an isolated subprocess and
+returns only what the script printed, so large data never enters the model's context. The same
+server hosts market watchers (model-authored conditions checked on a schedule without AI tokens,
+emailed when they become true) and a small web app where users log in to Zerodha and manage
+watchers.
+
+Broker access is read-only; Python workspace access is not. `run_python` can create,
+overwrite, or delete persistent workspace files, so it advertises write-capable,
+potentially destructive, non-idempotent behavior. It is confined to the connected user's
+workspace and allowed Kite read endpoints. Watcher scheduling remains a separate tool.
 
 ## How it fits together
 
 | Piece | What it does |
 |---|---|
-| `mcp/src/zapkite` | Library Claude's scripts import: account reads, quotes, candles, instruments, a derived option chain with Black-76 greeks, indicators, market hours. Read-only by construction. |
-| `mcp/src/zap_kite_mcp` | MCP server (Streamable HTTP, OAuth 2.1 authorization + resource server with dynamic client registration and PKCE), tools `run_python`, `auth_status`, `create_watcher`, `list_watchers`. |
+| `mcp/src/zapkite` | Library the model's scripts import: account reads, quotes, candles, instruments, a derived option chain with Black-76 greeks, indicators, market hours. Read-only by construction. |
+| `mcp/src/zap_kite_mcp` | MCP server (Streamable HTTP, OAuth 2.1 authorization + resource server with dynamic client registration, Client ID Metadata Documents, PKCE, RFC 8707 resource binding, RFC 9207 `iss`, UserInfo), tools `run_python`, `auth_status`, `profile`, `create_watcher`, `list_watchers`. |
 | Gateway | Local `GET /kite/...` endpoint. Scripts hold only a per-run token; the gateway injects the user's Kite access token, allows read endpoints only and applies Kite's per-app rate limits. |
 | Runner | Spawns `python -I` per script with a scrubbed environment, wall-clock timeout, output cap and a per-user workspace that persists between calls. |
 | Watchers | Postgres-backed sweeper: baseline on first check, one alert per not-met→met transition, market-hours gate per exchange, pause when the Kite session ends and auto-resume after the next login. |
@@ -26,6 +32,8 @@ instruments dump plus one batched quote call.
 ## Requirements
 
 - Python 3.12 and [uv](https://docs.astral.sh/uv/).
+- Native Linux and Bubblewrap for script execution (including watcher checks).
+  Execution fails closed on unsupported hosts; see [sandbox setup and validation](SANDBOX.md).
 - PostgreSQL 14 or newer.
 - A Kite Connect app on the Connect plan (market data), with its redirect URL set to
   `<web app origin>/api/broker/kite/callback`.
@@ -43,14 +51,16 @@ npm run mcp                     # Python server: migrates the database, serves h
 `npm run mcp` is `uv run --directory mcp zap-kite-mcp`; the Python project lives in `mcp/`
 with its own `pyproject.toml` and `uv.lock`.
 
-Give Claude [`mcp/SKILL.md`](mcp/SKILL.md): it is the document that teaches the model how to write
+Give the model [`mcp/SKILL.md`](mcp/SKILL.md): it is the document that teaches it how to write
 scripts against `zapkite` (one composed script per question, return shapes, Kite quirks,
 watcher contract). The tool description carries only a short reference.
 
 Set `DEV_LOGIN_EMAIL` and `DEV_LOGIN_CODE` in `.env` to sign in without email while
 developing. Open the web app, sign in, click "Log in to Zerodha". Add the MCP to claude.ai as a
-custom connector with URL `http://127.0.0.1:8019/` (a public HTTPS URL in production); the
-connector runs the OAuth flow with the same email sign-in.
+custom connector, or to ChatGPT (Plugins → Add custom MCP server, OAuth), with URL
+`http://127.0.0.1:8019/` (a public HTTPS URL in production); both hosts run the OAuth flow with
+the same email sign-in. ChatGPT registers through its Client ID Metadata Document, Claude through
+dynamic client registration.
 
 `mcp/scripts/kite_login.py` obtains a Kite access token without the web app and
 `npm run mcp:smoke` exercises the library against the real API with it.
@@ -59,8 +69,10 @@ connector runs the OAuth flow with the same email sign-in.
 
 Python server: `deploy/` holds a hardened systemd unit, an nginx snippet (including the
 root-level OAuth discovery routes a path-scoped issuer needs), a one-time `setup-uat.sh` and
-`update.sh`. `package.json` wraps them: `npm run deploy:setup` once, then `npm run deploy` after
-every push to `dev`; `npm run status` and `npm run logs` for operations.
+`update.sh`. `package.json` wraps them through `deploy/remote.sh`, which reads the box address from
+`DEPLOY_HOST` (for example `root@203.0.113.10`) or the git-ignored file `deploy/.host`:
+`npm run deploy:setup` once, then `npm run deploy` after every push to `dev`; `npm run status`
+and `npm run logs` for operations.
 
 Web app: import the repository into Vercel (root directory = repository root), add the web
 variables from `.env.example`, and point the Kite app's redirect URL at `https://<domain>/api/broker/kite/callback`.
@@ -77,6 +89,13 @@ The Python suite runs the real server against an in-process fake Kite: OAuth log
 through the gateway, token expiry, watcher lifecycle and emails. The web tests pin the crypto formats to vectors produced by the Python
 side.
 
+## OpenAI plugin package
+
+Run `npm run plugin:openai:build` to create the curated submission ZIP under `dist/`.
+The OpenAI package keeps `run_python` and bundles the canonical skill with OAuth and
+listing metadata. See [OpenAI packaging and submission notes](OPENAI_PLUGIN.md) for
+validation and the remaining portal steps. The Claude package remains in `plugin/`.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
@@ -85,11 +104,11 @@ MIT. See [LICENSE](LICENSE).
 
 The `dev` branch is the staging source for both services. Vercel deploys it to
 **Preview** (Development is Vercel's local environment), with the repository root as the project root.
-`main` remains reserved for future production changes; do not promote staging previews.
+`prod` is the production release branch; do not promote staging previews.
 
 - App and its `/api/*` routes: `https://staging-kite-app.slash.markets`.
   Add this project domain with Preview branch `dev`; use Vercel's returned DNS target.
-- MCP connector: `https://staging-kite-mcp.slash.markets/` on UAT `64.227.149.33`.
+- MCP connector: `https://staging-kite-mcp.slash.markets/` on the staging box.
   `deploy/staging-nginx.conf` is a separate nginx site; obtain its TLS certificate with
   Certbot before enabling the HTTPS block. Preserve the existing UAT site.
 - Vercel Preview `NEXT_PUBLIC_MCP_URL` must match the MCP connector URL. It is embedded
@@ -115,3 +134,33 @@ Vercel Deployment Protection must have an exception for only
 app and Zerodha callback. Keep all generated Preview URLs protected. The app's
 own authentication is still required for protected APIs. The domain's Namecheap
 CNAME target is `2415d0c3a7c8697b.vercel-dns-017.com` (recheck Vercel if moving projects).
+
+## Production
+
+Production uses branch `prod` for both the MCP server and Vercel web app.
+Staging continues using `dev`.
+
+| Service | Address | Deployment |
+|---|---|---|
+| MCP | `https://mcp.slash.markets/` | `root@168.144.85.144`, nginx → `127.0.0.1:8019` |
+| Web app | `https://app.slash.markets` | Vercel Production, repository root |
+
+Run `npm run deploy:prod:setup` for initial MCP setup, `npm run deploy:prod` to deploy,
+and `npm run status:prod` or `npm run logs:prod` to inspect it. Production uses
+`/opt/zap-kite-mcp-prod`, service `zap-kite-mcp-prod`, user `zapkiteprod`, and state
+`/var/lib/zapkiteprod`. Setup creates its `.env` with fresh secrets but does not start it.
+Keep `/root/zap-kite-prod-deploy/update-prod.sh` synchronized with `deploy/update-prod.sh`.
+
+The production database URL uses the direct Neon host and `options=-csearch_path=prod`,
+with no `public` fallback. Both services share production session/encryption keys;
+staging uses separate keys and its existing schema. Schemas share a database owner.
+Development login overrides must remain disabled in Production.
+
+DNS: MCP A record → `168.144.85.144`; app CNAME →
+`2415d0c3a7c8697b.vercel-dns-017.com`. `deploy/prod-nginx.conf` configures the MCP host;
+issue its certificate with Certbot before enabling TLS. Preserve existing nginx sites.
+
+Kite credentials are temporarily shared with staging. When the production Connect app
+is ready, set its callback to `https://app.slash.markets/api/broker/kite/callback`,
+update `KITE_API_KEY`/`KITE_API_SECRET` in the production server and Vercel Production,
+and redeploy both. Leave staging's Kite settings unchanged.

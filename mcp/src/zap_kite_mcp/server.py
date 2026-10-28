@@ -8,18 +8,33 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from typing import Any, NotRequired, TypedDict
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import anyio
 import httpx
+import uvicorn
 from dotenv import load_dotenv
 from mcp.server.auth.middleware.auth_context import get_access_token
-from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
-from mcp.server.mcpserver import MCPServer
+from mcp.server.auth.routes import build_metadata, cors_middleware
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import Tool as MCPTool
+from mcp.types import ToolAnnotations
+from starlette.applications import Starlette
+from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from starlette.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
+from starlette.routing import Route
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from zapkite.schema import reference
 
@@ -30,7 +45,7 @@ from .db import Database
 from .gateway import Gateway, RunTokens
 from .identity import Identity, IdentityError
 from .mail import Mailer
-from .oauth import LoginExpired, OAuthProvider
+from .oauth import ALL_SCOPES, LoginExpired, OAuthProvider
 from .runner import Runner
 from .watchers import BROKER_REASONS, Watchers
 
@@ -41,7 +56,8 @@ RULES = """Run a Python 3 script in the /markets sandbox and return what it prin
 HOW TO USE
 - Write a COMPLETE script that does `import zapkite as z`. It is pre-installed and read-only; the user's Kite session is already wired in through a local gateway, so never ask for, print or hard-code credentials. Standard library only (json, statistics, math, datetime, csv, sqlite3, collections); pandas/numpy are NOT installed.
 - Do the computation IN the script and print ONLY the compact result (a small dict via json.dumps, or a few lines). NEVER print raw candle lists, full chains or whole holdings; every printed byte lands in your context. Aggregate, filter, round.
-- Files persist in the working directory between calls: store big fetched data in a file in one script and read it back in the next.
+- Scripts can create, overwrite, or delete files in the signed-in user's persistent workspace. Files persist between calls; reuse saved data when useful. This tool changes workspace state even though access to Zerodha is read-only. Overwritten or deleted files may not be recoverable.
+- Access is limited to the connected user's allowed Kite read endpoints and isolated workspace; arbitrary network destinations are unavailable. Watcher creation and email scheduling use the separate create_watcher tool.
 - One question may need several scripts; call this tool once per script and compose the answer yourself.
 - A failing script returns its traceback as an error. Fix the code and retry; if it keeps failing, tell the user plainly what could not be done.
 - Errors explain themselves: TokenExpired means the user must log in to Zerodha again in the /markets app (sessions end every morning around 06:00 IST; call auth_status for the link). DataPlanMissing means the Kite Connect app lacks the market-data plan. CallBudgetExceeded means fetch less (batch quote keys, fewer strikes, wider intervals). RateLimited means Kite throttled the shared app key; wait a few seconds.
@@ -94,7 +110,12 @@ condition, last checked value and detail, alert history. Read-only. Pause, resum
 edit exist only on the watchers page; send the user the pageUrl when they ask for a change.\
 """
 
-NOT_SIGNED_IN = "Not signed in. Reconnect this connector on claude.ai."
+PROFILE_DESCRIPTION = """\
+The signed-in /markets account: a stable opaque id plus the user's name and email. Hosts use
+it to label which account is connected; prefer auth_status for anything about the Zerodha session.\
+"""
+
+NOT_SIGNED_IN = "Not signed in. Reconnect the /markets connector in your AI assistant."
 
 
 @dataclass
@@ -119,6 +140,7 @@ def build_app(
     *,
     kite_transport: httpx.AsyncBaseTransport | None = None,
     mail_client: httpx.Client | None = None,
+    cimd_transport: httpx.AsyncBaseTransport | None = None,
 ) -> App:
     db = Database(settings.database_url)
     db.migrate()
@@ -137,7 +159,8 @@ def build_app(
     gateway = Gateway(settings, broker, tokens, on_token_expired, transport=kite_transport)
     watchers = Watchers(settings, db, broker, runner, mailer, identity)
     watchers_ref.append(watchers)
-    provider = OAuthProvider(settings, db)
+    cimd_http = httpx.AsyncClient(transport=cimd_transport) if cimd_transport else None
+    provider = OAuthProvider(settings, db, cimd_http)
     return App(settings, db, mailer, identity, broker, tokens, gateway, runner, watchers, provider)
 
 
@@ -167,11 +190,59 @@ class Sweeper(threading.Thread):
         self._stop.set()
 
 
-def build_server(app: App) -> MCPServer:
+class AuthStatus(TypedDict):
+    signedIn: bool
+    email: str | None
+    broker: str | None
+    kiteUserId: str | None
+    sessionExpiresAt: str | None
+    appUrl: str | None
+    message: str | None
+
+
+class WatcherCreated(TypedDict):
+    created: bool
+    error: str | None
+    watcher: dict[str, Any] | None
+
+
+class WatcherList(TypedDict):
+    watchers: list[dict[str, Any]]
+    pageUrl: str
+    managing: str
+
+
+class Profile(TypedDict):
+    id: str
+    name: NotRequired[str | None]
+    email: NotRequired[str | None]
+
+
+OAUTH_SCHEME = {"securitySchemes": [{"type": "oauth2", "scopes": [SCOPE]}]}
+PROFILE_TOOL = "profile"
+
+
+class KiteServer(MCPServer[Any]):
+    """MCPServer whose profile tool publishes the closed object schema ChatGPT requires."""
+
+    async def list_tools(self) -> list[MCPTool]:
+        tools = await super().list_tools()
+        for tool in tools:
+            if tool.name == PROFILE_TOOL and tool.output_schema is not None:
+                tool.output_schema["additionalProperties"] = False
+        return tools
+
+
+def _is_openai_host(ctx: Context[Any, Any]) -> bool:
+    meta = ctx.request_context.meta or {}
+    return any(str(key).startswith("openai/") for key in meta)
+
+
+def build_server(app: App) -> KiteServer:
     s = app.settings
     description = RULES + reference(brief=True)
 
-    server = MCPServer(
+    server = KiteServer(
         "slash-markets-kite",
         instructions=(
             "/markets Kite sandbox: answer Zerodha account and Indian market questions by writing "
@@ -182,7 +253,7 @@ def build_server(app: App) -> MCPServer:
             issuer_url=s.public_url,  # type: ignore[arg-type]
             resource_server_url=s.mcp_url,  # type: ignore[arg-type]
             client_registration_options=ClientRegistrationOptions(
-                enabled=True, valid_scopes=[SCOPE], default_scopes=[SCOPE]
+                enabled=True, valid_scopes=list(ALL_SCOPES), default_scopes=list(ALL_SCOPES)
             ),
             required_scopes=[SCOPE],
             validate_token_resource=False,
@@ -194,9 +265,21 @@ def build_server(app: App) -> MCPServer:
         access = get_access_token()
         return access.subject if access and access.subject else None
 
-    @server.tool(name="run_python", description=description, structured_output=False)
-    async def run_python(code: str, timeout_seconds: int = 0) -> str:
-        """code: the complete Python script. timeout_seconds: wall-clock limit (default 60, max 180)."""
+    @server.tool(
+        name="run_python",
+        title="Run Python against Zerodha data",
+        description=description,
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=True,
+            idempotent_hint=False,
+            open_world_hint=False,
+        ),
+        meta=OAUTH_SCHEME,
+        structured_output=False,
+    )
+    async def run_python(code: str, ctx: Context[Any, Any], timeout_seconds: int = 0) -> str:
+        """code: the complete Python script. timeout_seconds: wall-clock limit (default 60, max 180; hosts with a shorter tool timeout, such as ChatGPT, are capped at about 50 s, so keep scripts cheap)."""
         user_id = subject()
         if user_id is None:
             return NOT_SIGNED_IN
@@ -205,10 +288,11 @@ def build_server(app: App) -> MCPServer:
         creds = await anyio.to_thread.run_sync(app.broker.creds, user_id)
         if not isinstance(creds, Creds):
             return broker_message(creds, s.app_url)
+        timeout = timeout_seconds or s.script_timeout_s
+        if _is_openai_host(ctx):
+            timeout = min(timeout, s.script_timeout_openai_s)
         async with run_gate:
-            result = await anyio.to_thread.run_sync(
-                app.runner.run, user_id, code, timeout_seconds or None
-            )
+            result = await anyio.to_thread.run_sync(app.runner.run, user_id, code, timeout)
         text = result.text()
         after = await anyio.to_thread.run_sync(app.broker.creds, user_id)
         if not isinstance(after, Creds):
@@ -217,29 +301,67 @@ def build_server(app: App) -> MCPServer:
             raise ToolError(text)
         return text
 
-    @server.tool(name="auth_status", description=AUTH_STATUS_DESCRIPTION, structured_output=False)
-    async def auth_status() -> str:
+    @server.tool(
+        name="auth_status",
+        title="Zerodha connection status",
+        description=AUTH_STATUS_DESCRIPTION,
+        annotations=ToolAnnotations(
+            read_only_hint=True, destructive_hint=False, open_world_hint=False
+        ),
+        meta=OAUTH_SCHEME,
+    )
+    async def auth_status() -> AuthStatus:
         user_id = subject()
         if user_id is None:
-            return json.dumps({"signedIn": False, "message": NOT_SIGNED_IN})
+            return AuthStatus(
+                signedIn=False,
+                email=None,
+                broker=None,
+                kiteUserId=None,
+                sessionExpiresAt=None,
+                appUrl=s.app_url,
+                message=NOT_SIGNED_IN,
+            )
         email = await anyio.to_thread.run_sync(app.identity.email_of, user_id)
         conn = await anyio.to_thread.run_sync(app.broker.connection, user_id)
-        return json.dumps(
-            {
-                "signedIn": True,
-                "email": email,
-                "broker": conn.status,
-                "kiteUserId": conn.kite_user_id,
-                "sessionExpiresAt": conn.expires_at.isoformat() if conn.expires_at else None,
-                "appUrl": s.app_url,
-                "message": None
-                if conn.status == "active"
-                else broker_message(conn.status, s.app_url),
-            }
+        return AuthStatus(
+            signedIn=True,
+            email=email,
+            broker=conn.status,
+            kiteUserId=conn.kite_user_id,
+            sessionExpiresAt=conn.expires_at.isoformat() if conn.expires_at else None,
+            appUrl=s.app_url,
+            message=None if conn.status == "active" else broker_message(conn.status, s.app_url),
         )
 
     @server.tool(
-        name="create_watcher", description=CREATE_WATCHER_DESCRIPTION, structured_output=False
+        name=PROFILE_TOOL,
+        title="Signed-in /markets account",
+        description=PROFILE_DESCRIPTION,
+        annotations=ToolAnnotations(
+            read_only_hint=True, destructive_hint=False, open_world_hint=False
+        ),
+        meta={**OAUTH_SCHEME, "openai/profile": True},
+    )
+    async def profile() -> Profile:
+        user_id = subject()
+        if user_id is None:
+            raise ToolError(NOT_SIGNED_IN)
+        email = await anyio.to_thread.run_sync(app.identity.email_of, user_id)
+        conn = await anyio.to_thread.run_sync(app.broker.connection, user_id)
+        return Profile(id=user_id, name=conn.user_name, email=email)
+
+    @server.tool(
+        name="create_watcher",
+        title="Create a market watcher",
+        description=CREATE_WATCHER_DESCRIPTION,
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=True,
+        ),
+        meta=OAUTH_SCHEME,
     )
     async def create_watcher(
         symbol: str,
@@ -248,10 +370,10 @@ def build_server(app: App) -> MCPServer:
         check_every_minutes: int = 1,
         expires_in_days: int = 30,
         market: str = "auto",
-    ) -> str:
+    ) -> WatcherCreated:
         user_id = subject()
         if user_id is None:
-            return NOT_SIGNED_IN
+            return WatcherCreated(created=False, error=NOT_SIGNED_IN, watcher=None)
         async with run_gate:
             result = await anyio.to_thread.run_sync(
                 app.watchers.create,
@@ -263,22 +385,26 @@ def build_server(app: App) -> MCPServer:
                 expires_in_days,
                 market,
             )
-        return result if isinstance(result, str) else json.dumps(result)
+        if isinstance(result, str):
+            return WatcherCreated(created=False, error=result, watcher=None)
+        return WatcherCreated(created=True, error=None, watcher=result)
 
     @server.tool(
-        name="list_watchers", description=LIST_WATCHERS_DESCRIPTION, structured_output=False
+        name="list_watchers",
+        title="List market watchers",
+        description=LIST_WATCHERS_DESCRIPTION,
+        annotations=ToolAnnotations(
+            read_only_hint=True, destructive_hint=False, open_world_hint=False
+        ),
+        meta=OAUTH_SCHEME,
     )
-    async def list_watchers() -> str:
+    async def list_watchers() -> WatcherList:
         user_id = subject()
         if user_id is None:
-            return NOT_SIGNED_IN
+            raise ToolError(NOT_SIGNED_IN)
         rows = await anyio.to_thread.run_sync(app.watchers.list_for, user_id)
-        return json.dumps(
-            {
-                "watchers": rows,
-                "pageUrl": s.app_url,
-                "managing": "page only; you cannot modify watchers",
-            }
+        return WatcherList(
+            watchers=rows, pageUrl=s.app_url, managing="page only; you cannot modify watchers"
         )
 
     def page(title: str, body: str, status: int = 200) -> HTMLResponse:
@@ -286,13 +412,33 @@ def build_server(app: App) -> MCPServer:
 
     expired_page: Callable[[], HTMLResponse] = lambda: page(  # noqa: E731
         "Sign in",
-        pages.error_box("Login session expired. Go back to Claude and connect again."),
+        pages.error_box("Login session expired. Go back to your AI assistant and connect again."),
         400,
     )
 
     @server.custom_route("/health", methods=["GET"])
     async def health(_: Request) -> JSONResponse:
         return JSONResponse({"ok": True, "service": "zap-kite-mcp", "mcp": s.mcp_url})
+
+    @server.custom_route("/userinfo", methods=["GET", "POST"])
+    async def userinfo(request: Request) -> JSONResponse:
+        header = request.headers.get("authorization", "")
+        token = header[7:] if header.lower().startswith("bearer ") else ""
+        access = await app.provider.load_access_token(token) if token else None
+        if access is None or not access.subject:
+            return JSONResponse(
+                {"error": "invalid_token"},
+                status_code=401,
+                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+            )
+        email = await anyio.to_thread.run_sync(app.identity.email_of, access.subject)
+        return JSONResponse({"sub": access.subject, "email": email, "email_verified": True})
+
+    @server.custom_route("/.well-known/openai-apps-challenge", methods=["GET"])
+    async def openai_apps_challenge(_: Request) -> PlainTextResponse:
+        if not s.openai_apps_challenge:
+            return PlainTextResponse("not configured", status_code=404)
+        return PlainTextResponse(s.openai_apps_challenge)
 
     @server.custom_route("/login", methods=["GET"])
     async def login(request: Request) -> HTMLResponse:
@@ -309,8 +455,8 @@ def build_server(app: App) -> MCPServer:
             "Sign in",
             pages.email_form(
                 f"{s.public_url}/login/email",
-                "Connect Claude to your /markets account",
-                "Read-only: Claude can analyse your Zerodha account but can never trade.",
+                "Connect your AI assistant to your /markets account",
+                "Read-only: the assistant can analyse your Zerodha account but can never trade.",
                 hidden=hidden,
             ),
         )
@@ -327,8 +473,8 @@ def build_server(app: App) -> MCPServer:
         except IdentityError as e:
             body = pages.email_form(
                 f"{s.public_url}/login/email",
-                "Connect Claude to your /markets account",
-                "Read-only: Claude can analyse your Zerodha account but can never trade.",
+                "Connect your AI assistant to your /markets account",
+                "Read-only: the assistant can analyse your Zerodha account but can never trade.",
                 pages.error_box(str(e)),
                 hidden,
             )
@@ -394,6 +540,78 @@ def transport_security(settings: Settings) -> TransportSecuritySettings:
     )
 
 
+class _IssOnRedirect:
+    """Add RFC 9207 `iss` to the error redirects the SDK's /authorize sends back to a client."""
+
+    def __init__(self, app: ASGIApp, issuer: str, own_prefix: str) -> None:
+        self._app = app
+        self._issuer = issuer
+        self._own_prefix = own_prefix
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        async def send_with_iss(message: Message) -> None:
+            if message["type"] == "http.response.start" and 300 <= message["status"] < 400:
+                headers = MutableHeaders(scope=message)
+                location = headers.get("location")
+                if (
+                    location
+                    and not location.startswith(self._own_prefix)
+                    and "iss" not in parse_qs(urlparse(location).query)
+                ):
+                    joiner = "&" if "?" in location else "?"
+                    headers["location"] = location + joiner + urlencode({"iss": self._issuer})
+            await send(message)
+
+        await self._app(scope, receive, send_with_iss)
+
+
+def build_asgi(server: KiteServer, s: Settings) -> Starlette:
+    """The Starlette app: the SDK's streamable HTTP + OAuth routes, with the authorization
+    server metadata extended for ChatGPT (CIMD, public clients, `iss`, UserInfo) and `iss`
+    added to authorization error redirects."""
+    asgi = server.streamable_http_app(
+        streamable_http_path="/",
+        stateless_http=True,
+        json_response=True,
+        max_request_body_size=512 * 1024,
+        transport_security=transport_security(s),
+        host=s.host,
+    )
+    auth = server.settings.auth
+    assert auth is not None
+    base = build_metadata(
+        auth.issuer_url,
+        auth.service_documentation_url,
+        auth.client_registration_options or ClientRegistrationOptions(),
+        auth.revocation_options or RevocationOptions(),
+    )
+    metadata = base.model_dump(mode="json", by_alias=True, exclude_none=True)
+    metadata.update(
+        {
+            "token_endpoint_auth_methods_supported": [
+                "none",
+                "client_secret_post",
+                "client_secret_basic",
+            ],
+            "client_id_metadata_document_supported": True,
+            "authorization_response_iss_parameter_supported": True,
+            "userinfo_endpoint": f"{s.public_url}/userinfo",
+        }
+    )
+
+    async def serve_metadata(_: Request) -> JSONResponse:
+        return JSONResponse(metadata, headers={"Cache-Control": "public, max-age=3600"})
+
+    for route in asgi.router.routes:
+        if not isinstance(route, Route):
+            continue
+        if route.path == "/.well-known/oauth-authorization-server":
+            route.app = cors_middleware(serve_metadata, ["GET", "OPTIONS"])
+        elif route.path == "/authorize":
+            route.app = _IssOnRedirect(route.app, s.public_url, f"{s.public_url}/login")
+    return asgi
+
+
 def serve(app: App) -> None:
     server = build_server(app)
     s = app.settings
@@ -406,18 +624,8 @@ def serve(app: App) -> None:
         sweeper.stop()
 
 
-def _run_http(server: MCPServer, s: Settings) -> None:
-    anyio.run(
-        lambda: server.run_streamable_http_async(
-            host=s.host,
-            port=s.port,
-            streamable_http_path="/",
-            stateless_http=True,
-            json_response=True,
-            max_request_body_size=512 * 1024,
-            transport_security=transport_security(s),
-        )
-    )
+def _run_http(server: KiteServer, s: Settings) -> None:
+    uvicorn.run(build_asgi(server, s), host=s.host, port=s.port, log_level="info")
 
 
 def _env_file(explicit: str | None) -> str:

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import ipaddress
 import json
+import logging
 import secrets
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
+import httpx
 from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
@@ -20,10 +25,19 @@ from .config import SCOPE, Settings
 from .crypto import token_hash
 from .db import Database
 
+log = logging.getLogger("zap_kite_mcp.oauth")
+
 TXN_TTL_S = 900
 CODE_TTL_S = 300
 ACCESS_TTL_S = 3600
 REFRESH_TTL_S = 30 * 24 * 3600
+
+OIDC_SCOPES = ("openid", "email")
+ALL_SCOPES = (SCOPE, *OIDC_SCOPES)
+
+CIMD_TTL_S = 3600
+CIMD_MAX_BYTES = 64 * 1024
+CIMD_TIMEOUT_S = 5.0
 
 
 class LoginExpired(RuntimeError):
@@ -38,16 +52,85 @@ def _ts(seconds: int) -> datetime:
     return _now() + timedelta(seconds=seconds)
 
 
-class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]):
-    """SDK provider: the SDK validates the protocol (PKCE, DCR, redirects); this stores state."""
+def same_resource(a: str | None, b: str) -> bool:
+    """RFC 8707 resource comparison: scheme/host case-insensitive, trailing slash ignored."""
+    if not a:
+        return False
+    pa, pb = urlparse(a), urlparse(b)
+    return (
+        pa.scheme.lower() == pb.scheme.lower()
+        and pa.netloc.lower() == pb.netloc.lower()
+        and pa.path.rstrip("/") == pb.path.rstrip("/")
+        and not pa.query
+        and not pa.fragment
+    )
 
-    def __init__(self, settings: Settings, db: Database) -> None:
+
+def is_cimd_client_id(client_id: str) -> bool:
+    """A Client ID Metadata Document id is an https URL with a host name, no fragment."""
+    p = urlparse(client_id)
+    if p.scheme != "https" or not p.hostname or p.fragment or "@" in p.netloc:
+        return False
+    host = p.hostname.lower()
+    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
+        return False
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return False
+
+
+class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]):
+    """SDK provider: the SDK validates the protocol (PKCE, DCR, redirects); this stores state.
+
+    Clients come from dynamic registration (stored in Postgres) or from a Client ID Metadata
+    Document fetched from the client_id URL (ChatGPT's preferred method); CIMD clients are
+    public clients (`none`) and are cached in memory for an hour. Every client may request any
+    of our scopes, whatever it registered with, so clients registered before a scope existed
+    keep working.
+    """
+
+    def __init__(
+        self, settings: Settings, db: Database, http: httpx.AsyncClient | None = None
+    ) -> None:
         self._settings = settings
         self._db = db
+        self._http = http or httpx.AsyncClient(timeout=CIMD_TIMEOUT_S, follow_redirects=False)
+        self._cimd: dict[str, tuple[float, OAuthClientInformationFull]] = {}
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         row = self._db.one("SELECT data FROM oauth_clients WHERE client_id = %s", (client_id,))
-        return OAuthClientInformationFull.model_validate(row["data"]) if row else None
+        if row:
+            client = OAuthClientInformationFull.model_validate(row["data"])
+            client.scope = " ".join(ALL_SCOPES)
+            return client
+        if is_cimd_client_id(client_id):
+            return await self._client_from_cimd(client_id)
+        return None
+
+    async def _client_from_cimd(self, client_id: str) -> OAuthClientInformationFull | None:
+        cached = self._cimd.get(client_id)
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
+        try:
+            r = await self._http.get(client_id, headers={"Accept": "application/json"})
+        except httpx.HTTPError as e:
+            log.warning("CIMD fetch failed for %s: %s", client_id, e)
+            return None
+        if r.status_code != 200 or len(r.content) > CIMD_MAX_BYTES:
+            log.warning("CIMD rejected for %s: status %s", client_id, r.status_code)
+            return None
+        try:
+            doc = r.json()
+        except ValueError:
+            return None
+        client = _client_from_document(client_id, doc)
+        if client is None:
+            log.warning("CIMD document for %s is not usable", client_id)
+            return None
+        self._cimd[client_id] = (time.monotonic() + CIMD_TTL_S, client)
+        return client
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         self._db.execute(
@@ -60,10 +143,13 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
         txn = secrets.token_urlsafe(24)
+        scopes = list(params.scopes or [])
+        if SCOPE not in scopes:
+            scopes.insert(0, SCOPE)
         payload = {
             "client_id": client.client_id,
             "state": params.state,
-            "scopes": params.scopes or [SCOPE],
+            "scopes": scopes,
             "code_challenge": params.code_challenge,
             "redirect_uri": str(params.redirect_uri),
             "redirect_uri_provided_explicitly": params.redirect_uri_provided_explicitly,
@@ -92,7 +178,10 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
     ) -> OAuthToken:
         self._db.execute("DELETE FROM oauth_codes WHERE code = %s", (authorization_code.code,))
         return self._issue(
-            client.client_id, authorization_code.subject or "", authorization_code.scopes
+            client.client_id,
+            authorization_code.subject or "",
+            authorization_code.scopes,
+            authorization_code.resource,
         )
 
     async def load_refresh_token(
@@ -122,8 +211,9 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         if row is None:
             raise LoginExpired("refresh token unknown")
         self._db.execute("UPDATE oauth_tokens SET revoked = true WHERE pair = %s", (row["pair"],))
+        data = row["data"]
         return self._issue(
-            client.client_id, row["data"]["subject"], scopes or row["data"]["scopes"]
+            client.client_id, data["subject"], scopes or data["scopes"], data.get("resource")
         )
 
     async def load_access_token(self, token: str) -> AccessToken | None:
@@ -134,11 +224,16 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         )
         if row is None:
             return None
+        resource = row["data"].get("resource")
+        if resource and not same_resource(resource, self._settings.mcp_url):
+            log.warning("access token issued for another resource: %s", resource)
+            return None
         return AccessToken(
             token=token,
             client_id=row["data"]["client_id"],
             scopes=row["data"]["scopes"],
             expires_at=int(row["expires_at"].timestamp()),
+            resource=resource,
             subject=row["data"]["subject"],
         )
 
@@ -149,13 +244,17 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
             (token_hash(token.token),),
         )
 
-    def _issue(self, client_id: str, subject: str, scopes: list[str]) -> OAuthToken:
+    def _issue(
+        self, client_id: str, subject: str, scopes: list[str], resource: str | None
+    ) -> OAuthToken:
         access, refresh, pair = (
             secrets.token_urlsafe(32),
             secrets.token_urlsafe(32),
             secrets.token_hex(8),
         )
-        data = Jsonb({"client_id": client_id, "subject": subject, "scopes": scopes})
+        data = Jsonb(
+            {"client_id": client_id, "subject": subject, "scopes": scopes, "resource": resource}
+        )
         self._db.execute(
             "INSERT INTO oauth_tokens (token_hash, kind, data, pair, expires_at) VALUES "
             "(%s, 'access', %s, %s, %s), (%s, 'refresh', %s, %s, %s)",
@@ -197,7 +296,9 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         """Mint the authorization code for a verified user and return the client redirect URL."""
         t = self.txn(txn_id)
         if t is None:
-            raise LoginExpired("Login session expired. Go back to Claude and connect again.")
+            raise LoginExpired(
+                "Login session expired. Go back to your AI assistant and connect again."
+            )
         code = secrets.token_urlsafe(32)
         model = AuthorizationCode(
             code=code,
@@ -215,4 +316,40 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
             (code, Jsonb(json.loads(model.model_dump_json())), _ts(CODE_TTL_S)),
         )
         self._db.execute("DELETE FROM oauth_txns WHERE txn_id = %s", (txn_id,))
-        return construct_redirect_uri(t["redirect_uri"], code=code, state=t["state"])
+        return construct_redirect_uri(
+            t["redirect_uri"], code=code, state=t["state"], iss=self._settings.public_url
+        )
+
+
+def _client_from_document(client_id: str, doc: Any) -> OAuthClientInformationFull | None:
+    if not isinstance(doc, dict) or doc.get("client_id") != client_id:
+        return None
+    uris = doc.get("redirect_uris")
+    if not isinstance(uris, list) or not uris or not all(isinstance(u, str) for u in uris):
+        return None
+    if any(urlparse(u).scheme != "https" for u in uris):
+        return None
+    methods = doc.get("token_endpoint_auth_methods_supported") or [
+        doc.get("token_endpoint_auth_method", "none")
+    ]
+    if "none" not in methods:
+        return None
+    grants = doc.get("grant_types") or ["authorization_code", "refresh_token"]
+    if "authorization_code" not in grants:
+        return None
+    try:
+        return OAuthClientInformationFull(
+            client_id=client_id,
+            client_secret=None,
+            redirect_uris=uris,
+            token_endpoint_auth_method="none",
+            grant_types=[g for g in grants if g in ("authorization_code", "refresh_token")],
+            response_types=["code"],
+            scope=" ".join(ALL_SCOPES),
+            client_name=doc.get("client_name") or None,
+            client_uri=doc.get("client_uri") or None,
+            logo_uri=doc.get("logo_uri") or None,
+            application_type="web",
+        )
+    except ValueError:
+        return None
