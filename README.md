@@ -90,7 +90,7 @@ MIT. See [LICENSE](LICENSE).
 
 The `dev` branch is the staging source for both services. Vercel deploys it to
 **Preview** (Development is Vercel's local environment), with the repository root as the project root.
-`main` remains reserved for future production changes; do not promote staging previews.
+`prod` is the production release branch; do not promote staging previews.
 
 - App and its `/api/*` routes: `https://staging-kite-app.slash.markets`.
   Add this project domain with Preview branch `dev`; use Vercel's returned DNS target.
@@ -120,3 +120,33 @@ Vercel Deployment Protection must have an exception for only
 app and Zerodha callback. Keep all generated Preview URLs protected. The app's
 own authentication is still required for protected APIs. The domain's Namecheap
 CNAME target is `2415d0c3a7c8697b.vercel-dns-017.com` (recheck Vercel if moving projects).
+
+## Production
+
+Production uses branch `prod` for both the MCP server and Vercel web app.
+Staging continues using `dev`.
+
+| Service | Address | Deployment |
+|---|---|---|
+| MCP | `https://mcp.slash.markets/` | `root@168.144.85.144`, nginx → `127.0.0.1:8019` |
+| Web app | `https://app.slash.markets` | Vercel Production, repository root |
+
+Run `npm run deploy:prod:setup` for initial MCP setup, `npm run deploy:prod` to deploy,
+and `npm run status:prod` or `npm run logs:prod` to inspect it. Production uses
+`/opt/zap-kite-mcp-prod`, service `zap-kite-mcp-prod`, user `zapkiteprod`, and state
+`/var/lib/zapkiteprod`. Setup creates its `.env` with fresh secrets but does not start it.
+Keep `/root/zap-kite-prod-deploy/update-prod.sh` synchronized with `deploy/update-prod.sh`.
+
+The production database URL uses the direct Neon host and `options=-csearch_path=prod`,
+with no `public` fallback. Both services share production session/encryption keys;
+staging uses separate keys and its existing schema. Schemas share a database owner.
+Development login overrides must remain disabled in Production.
+
+DNS: MCP A record → `168.144.85.144`; app CNAME →
+`2415d0c3a7c8697b.vercel-dns-017.com`. `deploy/prod-nginx.conf` configures the MCP host;
+issue its certificate with Certbot before enabling TLS. Preserve existing nginx sites.
+
+Kite credentials are temporarily shared with staging. When the production Connect app
+is ready, set its callback to `https://app.slash.markets/api/broker/kite/callback`,
+update `KITE_API_KEY`/`KITE_API_SECRET` in the production server and Vercel Production,
+and redeploy both. Leave staging's Kite settings unchanged.
