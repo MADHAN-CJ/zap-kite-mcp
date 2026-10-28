@@ -1,7 +1,13 @@
 # Script execution boundary
 
 Script execution now requires native Linux with Bubblewrap (`bwrap`) supporting
-`--disable-userns`. There is no host-Python fallback, including on macOS. Run the
+`--disable-userns` (bubblewrap >= 0.8.0: Ubuntu 24.04 / Debian 12 or newer; Ubuntu
+22.x ships 0.6 and cannot run the sandbox). Under systemd, bwrap also needs
+`AF_NETLINK` in `RestrictAddressFamilies` (loopback in the new network namespace)
+and `/proc/sys/user` in `ReadWritePaths` (`--disable-userns` writes
+`/proc/sys/user/max_user_namespaces` for its child user namespace; `ProtectKernelTunables`
+stays on for everything else). A uv virtualenv's `bin/python` points into an
+unversioned alias directory; the sandbox recreates those symlink hops with `--symlink`. There is no host-Python fallback, including on macOS. Run the
 MCP execution service in a Linux development VM when developing on a Mac.
 
 Each invocation gets separate mount, user, PID, IPC, and network namespaces.
@@ -50,6 +56,10 @@ setup failure prevents service startup; it must not be bypassed to restore servi
 Use the distribution-supported Bubblewrap/user-namespace policy if AppArmor or
 kernel configuration prevents startup. Do not remove namespace flags or globally
 disable host protection as a workaround.
+
+Validated 28 October 2026 on the staging box (Ubuntu 22.10, bubblewrap 0.8.0 from
+Debian 12): the preflight passes under the unit's full restriction set with the two
+directives above, and `tests/test_sandbox.py` passes 16/16 as the service user.
 
 The test suite includes Linux-only checks for cross-user and host-file isolation,
 runtime writes, namespace creation, host networking, persistent workspace behavior,

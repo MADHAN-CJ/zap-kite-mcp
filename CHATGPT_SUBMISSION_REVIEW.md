@@ -57,6 +57,22 @@ finding and reproduction below describe the pre-change runner. macOS cannot exec
 the Linux namespace tests. No deployment or push has been performed. The generic
 executor, annotation, retention, and full resource-quota findings remain separate.
 
+**Linux validation, 28 October:** on the staging box (bubblewrap 0.8.0; the
+distribution's 0.6 lacks `--disable-userns`) the startup preflight passes under the
+unit's full restriction set and `mcp/tests/test_sandbox.py` passes 16/16 as the
+service user, including the cross-user, host-file, network-egress, child-process and
+socket-transport cases. Two defects were found and fixed without widening what a
+sandboxed script can reach: (a) a uv virtualenv's `bin/python` resolves through an
+unversioned alias directory that was not mounted, so `execvp` failed; the sandbox now
+recreates those symlink hops with `--symlink` into the already read-only interpreter
+tree (`_executable_links`, unit-tested); (b) the systemd units must allow `AF_NETLINK`
+(bwrap configures loopback inside the new, otherwise empty network namespace; no
+`CAP_NET_ADMIN` is held there) and list `/proc/sys/user` in `ReadWritePaths` (bwrap
+writes `max_user_namespaces=0` for its child user namespace; `ProtectKernelTunables`
+remains enabled for all other tunables). The deploy scripts now probe
+`--disable-userns` support before touching the service. Not yet deployed to
+production.
+
 ### 1. Critical — Python execution does not isolate users
 
 Evidence: `mcp/src/zap_kite_mcp/runner.py:47`, `:89`; `deploy/zap-kite-mcp.service:7`.

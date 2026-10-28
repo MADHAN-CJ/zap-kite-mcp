@@ -23,6 +23,31 @@ class SandboxUnavailable(RuntimeError):
     pass
 
 
+def _executable_links(executable: Path) -> list[tuple[Path, Path]]:
+    """Every symlink hop from ``executable`` to the real interpreter, outermost first.
+
+    A uv virtualenv's ``bin/python`` points into an unversioned alias directory
+    (``cpython-3.12-linux-x86_64-gnu -> cpython-3.12.15-linux-x86_64-gnu``). Only the
+    resolved interpreter tree is mounted in the sandbox, so each hop outside a mounted
+    tree has to be recreated or ``execvp`` fails with ENOENT.
+    """
+    hops: list[tuple[Path, Path]] = []
+    path = executable
+    for _ in range(32):
+        for ancestor in (*reversed(path.parents), path):
+            if not ancestor.is_symlink():
+                continue
+            target = ancestor.readlink()
+            if not target.is_absolute():
+                target = ancestor.parent / target
+            hops.append((ancestor, target))
+            path = target / path.relative_to(ancestor)
+            break
+        else:
+            return hops
+    raise SandboxUnavailable("Interpreter symlink chain is too deep")
+
+
 class Sandbox:
     def check_available(self) -> str:
         binary = shutil.which("bwrap") if sys.platform == "linux" else None
@@ -52,6 +77,9 @@ class Sandbox:
         ]
         for root in sorted(roots):
             command += ["--ro-bind", str(root), str(root)]
+        for link, target in _executable_links(Path(sys.executable)):
+            if not any(link.is_relative_to(root) for root in roots):
+                command += ["--symlink", str(target), str(link)]
         for directory in ("/lib", "/lib64", "/usr/lib"):
             if Path(directory).exists():
                 command += ["--ro-bind", directory, directory]

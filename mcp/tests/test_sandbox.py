@@ -13,7 +13,13 @@ import pytest
 from zap_kite_mcp.config import Settings
 from zap_kite_mcp.gateway import RunTokens
 from zap_kite_mcp.runner import Runner
-from zap_kite_mcp.sandbox import GatewayBridge, Sandbox, SandboxUnavailable, allowed_gateway_target
+from zap_kite_mcp.sandbox import (
+    GatewayBridge,
+    Sandbox,
+    SandboxUnavailable,
+    _executable_links,
+    allowed_gateway_target,
+)
 
 
 @pytest.fixture
@@ -67,6 +73,24 @@ def test_missing_sandbox_never_falls_back(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("zap_kite_mcp.sandbox.shutil.which", lambda _: None)
     with pytest.raises(SandboxUnavailable):
         Sandbox().check_available()
+
+
+def test_executable_links_follow_uv_alias_directory(tmp_path: Path) -> None:
+    # uv: .venv/bin/python -> <alias dir>/bin/python3.12, <alias dir> -> <versioned dir>.
+    real = tmp_path / "cpython-3.12.15-linux-x86_64-gnu"
+    (real / "bin").mkdir(parents=True)
+    (real / "bin" / "python3.12").write_text("")
+    alias = tmp_path / "cpython-3.12-linux-x86_64-gnu"
+    alias.symlink_to("cpython-3.12.15-linux-x86_64-gnu")
+    venv_python = tmp_path / "venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.symlink_to(alias / "bin" / "python3.12")
+
+    assert _executable_links(venv_python) == [
+        (venv_python, alias / "bin" / "python3.12"),
+        (alias, real),
+    ]
+    assert _executable_links(real / "bin" / "python3.12") == []
 
 
 def test_workspace_rejects_traversal_and_symlinks(tmp_path: Path) -> None:

@@ -23,8 +23,10 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 InaccessiblePaths=-/var/www -/etc/nginx -/etc/letsencrypt -/opt/zap-claude-mcp -/opt/zap-eve-mcp
-ReadWritePaths=/var/lib/zapkite
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# /proc/sys/user: bwrap --disable-userns sets max_user_namespaces=0 for its child user namespace.
+ReadWritePaths=/var/lib/zapkite /proc/sys/user
+# AF_NETLINK: bwrap --unshare-net configures loopback inside the new network namespace.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 LockPersonality=true
 MemoryMax=1G
 CPUQuota=200%
