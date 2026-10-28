@@ -22,8 +22,12 @@ for key in ("ZAP_KITE_MCP_PUBLIC_URL", "ZAP_KITE_MCP_APP_URL", "RESEND_API_KEY",
         raise SystemExit(f"Missing production setting: {key}")
 if not settings.public_url.startswith("https://") or not settings.app_url.startswith("https://"):
     raise SystemExit("Production public URLs must use HTTPS")
+REVIEWER_LOGIN_EMAIL = "test@slash.markets"
 if settings.dev_login_email or settings.dev_login_code:
-    raise SystemExit("Fixed development login is forbidden in production")
+    if settings.dev_login_email != REVIEWER_LOGIN_EMAIL or not settings.dev_login_code:
+        raise SystemExit(
+            f"A fixed login code in production is allowed only for {REVIEWER_LOGIN_EMAIL}"
+        )
 if settings.host != "127.0.0.1":
     raise SystemExit("Production MCP must bind to loopback behind nginx")
 options = parse_qs(urlparse(settings.database_url).query).get("options", [])
