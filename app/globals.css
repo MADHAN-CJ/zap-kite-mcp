@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Departure Mono";
+  src: url("/brand/fonts/departure-mono.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Onest";
+  src: url("/brand/fonts/onest-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Libre Baskerville";
+  src: url("/brand/fonts/libre-baskerville-500-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -19,45 +41,52 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --color-surface: var(--surface);
+  --color-select: var(--select);
+  --color-positive: var(--positive);
+  --color-positive-surface: var(--positive-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-negative: var(--negative);
+  --color-negative-surface: var(--negative-surface);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 24px;
+  --font-sans: "Onest", Arial, sans-serif;
+  --font-serif: "Libre Baskerville", Georgia, serif;
+  --font-mono: "Departure Mono", ui-monospace, monospace;
 }
 
 :root {
   color-scheme: light;
-  /*
-   * Slash Markets theme — brand greens on light surfaces (brand history:
-   * deep green #001908 console color, #17be5f accent). Deep forest primary
-   * holds AA on white; the bright accent is reserved for status dots and
-   * positive P&L. Light-only for v1.
-   */
+  /* /markets brand values (slash-dashboard/BRAND_GUIDELINES.md). Light only. */
   --background: #ffffff;
-  --foreground: #14201a;
+  --foreground: #20251b;
   --card: #ffffff;
-  --card-foreground: #14201a;
-  --popover: #ffffff;
-  --popover-foreground: #14201a;
-  --primary: #0c6b3d;
+  --card-foreground: #20251b;
+  --popover: #f7f6f2;
+  --popover-foreground: #20251b;
+  --primary: #171a17;
   --primary-foreground: #ffffff;
-  --secondary: #e3f3ea;
-  --secondary-foreground: #0c6b3d;
-  --muted: #eef2ef;
-  --muted-foreground: #6f7d75;
-  --accent: #eef2ef;
-  --accent-foreground: #14201a;
-  --destructive: #b3261e;
-  --border: #e2e8e4;
-  --input: #e2e8e4;
-  --ring: #0c6b3d;
-  --radius: 0.625rem; /* 10px */
-  --sidebar: #f4f7f5;
-  --sidebar-foreground: #14201a;
+  --secondary: #f7f6f2;
+  --secondary-foreground: #20251b;
+  --muted: #f3f5ee;
+  --muted-foreground: #62675f;
+  --accent: #f7f6f2;
+  --accent-foreground: #20251b;
+  --destructive: #a43c2f;
+  --border: #e4e7dc;
+  --input: #e4e7dc;
+  --ring: #4a6640;
+  --surface: #f7f6f2;
+  --select: #f6d64d;
+  --positive: #34432e;
+  --positive-surface: #e6efdc;
+  --warning: #6b5a12;
+  --warning-surface: #f6d64d;
+  --negative: #a43c2f;
+  --negative-surface: #f8e3df;
 }
 
 * {
@@ -72,11 +101,198 @@ body {
   min-height: 100%;
   margin: 0;
   background: var(--background);
+  color: var(--foreground);
   font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  text-wrap: pretty;
 }
 
 button,
 input,
 textarea {
   font: inherit;
+}
+
+::selection {
+  background: var(--select);
+  color: var(--foreground);
+}
+
+.markets-slash {
+  display: inline-block;
+  width: 0.424em;
+  height: 0.8em;
+  margin-right: 0.04em;
+  vertical-align: -0.12em;
+  overflow: hidden;
+  text-indent: 1em;
+  background: currentColor;
+  mask: url("/brand/markets-slash.svg") center / contain no-repeat;
+  -webkit-mask: url("/brand/markets-slash.svg") center / contain no-repeat;
+}
+
+.markets-label {
+  display: inline;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  white-space: nowrap;
+}
+
+.glass {
+  background: rgb(247 246 242 / 0.74);
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+}
+
+.legal h1 {
+  margin: 8px 0 4px;
+  font-size: clamp(32px, 4.2vw, 48px);
+  line-height: 1.1;
+}
+
+.legal .legal-meta {
+  margin: 0 0 24px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+
+.legal .legal-intro {
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.legal .legal-intro p {
+  margin: 0;
+}
+
+.legal .legal-intro p + p {
+  margin-top: 10px;
+}
+
+.legal .legal-toc {
+  margin: 28px 0 8px;
+  font-size: 15px;
+}
+
+.legal .legal-toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: 24px;
+}
+
+.legal .legal-toc li {
+  margin: 0 0 6px;
+  break-inside: avoid;
+}
+
+.legal .legal-toc a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+.legal .legal-toc a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.legal section {
+  margin-top: 36px;
+  scroll-margin-top: 80px;
+}
+
+.legal h2 {
+  margin: 0 0 12px;
+  font-size: 24px;
+}
+
+.legal h3 {
+  margin: 20px 0 8px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.legal p,
+.legal li {
+  text-wrap: pretty;
+}
+
+.legal p {
+  margin: 0 0 12px;
+}
+
+.legal ul,
+.legal ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.legal li {
+  margin-bottom: 6px;
+}
+
+.legal li::marker {
+  color: var(--muted-foreground);
+}
+
+.legal a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.legal table {
+  width: 100%;
+  margin: 8px 0 16px;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.legal th,
+.legal td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal th {
+  font-weight: 600;
+}
+
+.legal .legal-table-wrap {
+  overflow-x: auto;
+}
+
+.legal .placeholder {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--warning-surface);
+  color: var(--warning);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+@media (max-width: 680px) {
+  .legal .legal-toc ol {
+    columns: 1;
+  }
 }

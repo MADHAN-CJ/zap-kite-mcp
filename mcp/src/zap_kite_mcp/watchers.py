@@ -7,13 +7,16 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from zapkite.config import IST
 from zapkite.markets import HOURS, hours_for, is_open
 
 from .broker import Broker, Creds
 from .config import Settings
 from .db import Database, Row
+from .emails import session_paused, watcher_alert
 from .identity import Identity
 from .mail import Mailer
+from .pages import LOGOMARK_PATHS
 from .runner import Runner
 
 log = logging.getLogger(__name__)
@@ -32,13 +35,13 @@ _MCX_RE = re.compile(
 
 BROKER_REASONS = {
     "not_connected": (
-        "Zerodha is not connected. Log in to Zerodha in the Slash Markets app, then resume."
+        "Zerodha is not connected. Log in to Zerodha in the /markets app, then resume."
     ),
     "token_expired": (
-        "The Zerodha session expired. Log in again in the Slash Markets app; "
+        "The Zerodha session expired. Log in again in the /markets app; "
         "watchers resume automatically."
     ),
-    "disconnected": "Zerodha is disconnected. Log in again in the Slash Markets app, then resume.",
+    "disconnected": "Zerodha is disconnected. Log in again in the /markets app, then resume.",
 }
 
 
@@ -288,6 +291,7 @@ class Watchers:
         }
         self._notify_expired_sessions(report)
         self._retry_unsent(report)
+        self._db.execute("DELETE FROM otps WHERE expires_at < now() - interval '7 days'")
         report["expired"] = self._db.execute(
             "UPDATE watchers SET status = 'EXPIRED', paused_by = NULL, updated_at = now() "
             "WHERE status IN ('ARMED', 'PAUSED') AND expires_at < now()"
@@ -314,14 +318,7 @@ class Watchers:
 
     def _notify_expired_sessions(self, report: dict[str, Any]) -> None:
         for user_id, email in self._broker.users_to_notify_of_expiry():
-            text = (
-                "Your Zerodha session has ended (Kite sessions expire every morning), "
-                "so your Slash Markets "
-                "watchers are paused.\n\nLog in to Zerodha again and they resume automatically:\n"
-                f"{self.page_url}\n\nZap is read-only; it can never trade."
-            )
-            subject = "Slash Markets watchers paused: log in to Zerodha again"
-            if self._mailer.send(email, subject, text):
+            if self._mailer.send(email, session_paused(self.page_url, LOGOMARK_PATHS)):
                 self._broker.record_expiry_mail(user_id)
                 report["expiryMails"] += 1
 
@@ -343,24 +340,16 @@ class Watchers:
         email = self._identity.email_of(str(row["user_id"]))
         if not email:
             return False
-        lines = [
-            f"Your watcher on {row['symbol']} just triggered.",
-            "",
-            f"Condition: {row['label']}",
-        ]
-        if value is not None:
-            lines.append(f"Value: {value}")
-        if detail:
-            lines.append(f"Detail: {detail}")
-        lines += [
-            f"Time: {_now().astimezone().strftime('%d %b %Y, %H:%M %Z')}",
-            "",
-            f"Manage your watchers: {self.page_url}",
-            "",
-            "Slash Markets is read-only; it can never trade. "
-            "It alerts again after the condition resets.",
-        ]
-        return self._mailer.send(email, f"⚡ {row['symbol']}: {row['label']}", "\n".join(lines))
+        mail = watcher_alert(
+            str(row["symbol"]),
+            str(row["label"]),
+            None if value is None else str(value),
+            detail,
+            _now().astimezone(IST).strftime("%d %b %Y, %H:%M IST"),
+            self.page_url,
+            LOGOMARK_PATHS,
+        )
+        return self._mailer.send(email, mail)
 
     def _sweep_user(
         self, user_id: str, rows: list[Row], gap_s: int, report: dict[str, Any]

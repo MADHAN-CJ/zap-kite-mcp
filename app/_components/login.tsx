@@ -1,10 +1,13 @@
 "use client";
 
-import { Loader2Icon, ZapIcon } from "lucide-react";
+import { Loader2Icon } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
+import { Logomark, MarketsLabel, Wordmark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { requestOtp, verifyOtp } from "@/lib/client/api";
+import { SiteFooter } from "./site-footer";
 
 export function Login({ onLoggedIn }: { readonly onLoggedIn: () => void }) {
   const [step, setStep] = useState<"email" | "code">("email");
@@ -51,14 +54,18 @@ export function Login({ onLoggedIn }: { readonly onLoggedIn: () => void }) {
     <main className="flex h-dvh items-center justify-center bg-background text-foreground">
       <div className="flex w-full max-w-sm flex-col gap-6 px-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <ZapIcon className="size-5" />
-          </span>
-          <h1 className="font-medium text-3xl tracking-tighter">Slash Markets</h1>
-          <p className="text-muted-foreground text-sm">
-            Connect Zerodha to Claude and manage your market watchers. Read-only: it can never
-            trade.
+          <Logomark className="h-10" />
+          <h1 className="text-3xl">
+            Your AI, <br />
+            connected to the market.
+          </h1>
+          <p className="text-muted-foreground">
+            Sign in to connect Zerodha and manage the watchers <MarketsLabel /> keeps for you.
+            Read-only: it can never trade.
           </p>
+          <span className="sr-only">
+            <Wordmark />
+          </span>
         </div>
 
         {step === "email" ? (
@@ -77,13 +84,13 @@ export function Login({ onLoggedIn }: { readonly onLoggedIn: () => void }) {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="text-center text-muted-foreground text-sm">
+            <p className="text-center text-muted-foreground">
               Enter the 6-digit code sent to{" "}
               <span className="font-medium text-foreground">{email.trim()}</span>
             </p>
             <Input
               autoFocus
-              className="text-center tracking-[0.4em]"
+              className="text-center font-mono text-xl tracking-[0.4em]"
               inputMode="numeric"
               maxLength={6}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
@@ -108,7 +115,24 @@ export function Login({ onLoggedIn }: { readonly onLoggedIn: () => void }) {
           </div>
         )}
 
-        {error ? <p className="text-center text-destructive text-sm">{error}</p> : null}
+        {error ? (
+          <p className="rounded-xl bg-negative-surface px-4 py-2 text-center text-negative">
+            {error}
+          </p>
+        ) : null}
+
+        <p className="text-center text-muted-foreground text-sm">
+          By continuing you agree to the{" "}
+          <Link className="underline underline-offset-4 hover:text-foreground" href="/terms">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link className="underline underline-offset-4 hover:text-foreground" href="/privacy">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+        <SiteFooter compact />
       </div>
     </main>
   );

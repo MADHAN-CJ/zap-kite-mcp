@@ -5,12 +5,10 @@
       "**",
       "!.next",
       "!node_modules",
-      "!.vercel",
-      "!mcp",
-      "!deploy",
-      "!docs",
       "!next-env.d.ts",
-      "!**/*.css"
+      "!**/*.css",
+      "!**/*.svg",
+      "!mcp"
     ]
   },
   "formatter": {

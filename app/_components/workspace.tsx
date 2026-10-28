@@ -1,8 +1,9 @@
 "use client";
 
-import { LogOutIcon, RadarIcon, ZapIcon } from "lucide-react";
+import { LogOutIcon, RadarIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { BrandHeader, MarketsLabel } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import {
   type BrokerStatus,
@@ -14,6 +15,7 @@ import {
 import { clearSession, getUser, isLoggedIn } from "@/lib/client/session";
 import { BrokerCard } from "./broker-card";
 import { Login } from "./login";
+import { SiteFooter } from "./site-footer";
 import { WatchCard } from "./watch-card";
 
 const LIVE = new Set(["ARMED", "PAUSED", "ERROR"]);
@@ -89,63 +91,55 @@ export function Workspace() {
 
   return (
     <main className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto flex max-w-2xl flex-col gap-6 p-5">
-        <header className="flex items-center gap-3">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <ZapIcon className="size-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h1 className="font-medium text-lg tracking-tight">Slash Markets</h1>
-            <p className="truncate text-muted-foreground text-xs">{getUser()?.email}</p>
-          </div>
-          <Button onClick={signOut} size="sm" variant="ghost">
+      <div className="mx-auto flex max-w-2xl flex-col gap-8 px-5 pt-3 pb-16">
+        <header className="glass sticky top-3 z-10 flex items-center gap-3 rounded-full border px-4 py-2">
+          <BrandHeader className="min-w-0 flex-1" />
+          <p className="hidden truncate text-muted-foreground text-sm sm:block">
+            {getUser()?.email}
+          </p>
+          <Button onClick={signOut} size="xs" variant="ghost">
             <LogOutIcon className="size-4" /> Sign out
           </Button>
         </header>
 
         {notice ? (
-          <p className="rounded-md border border-emerald-600/40 bg-emerald-600/10 px-3 py-2 text-emerald-800 text-sm">
-            {notice}
-          </p>
+          <p className="rounded-xl bg-positive-surface px-4 py-3 text-positive">{notice}</p>
         ) : null}
         {error ? (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm">
-            {error}
-          </p>
+          <p className="rounded-xl bg-negative-surface px-4 py-3 text-negative">{error}</p>
         ) : null}
 
         <BrokerCard onChanged={setBroker} onError={fail} status={broker} />
 
         {MCP_URL ? (
-          <p className="text-muted-foreground text-xs">
-            Claude connector URL: <code className="font-mono">{MCP_URL}</code>
+          <p className="text-muted-foreground text-sm">
+            Add <MarketsLabel /> to Claude as a connector with{" "}
+            <code className="font-mono text-[15px]">{MCP_URL}</code>
           </p>
         ) : null}
 
         <section className="flex flex-col gap-3">
           <div>
-            <h2 className="flex items-center gap-2 font-semibold">
-              <RadarIcon className="size-4" /> Watchers
+            <h2 className="flex items-center gap-2 text-2xl">
+              <RadarIcon className="size-5" /> It keeps watch.
             </h2>
-            <p className="text-muted-foreground text-sm">
-              Background checks Claude set up for you. They run during market hours and email you
-              when a condition becomes true. Ask Claude to create one.
+            <p className="text-muted-foreground">
+              Checks your AI set up for you. They run during market hours and email you when a
+              condition becomes true. Ask Claude to create one.
             </p>
           </div>
-          {watches === null && !error ? (
-            <p className="text-muted-foreground text-sm">Loading…</p>
-          ) : null}
+          {watches === null && !error ? <p className="text-muted-foreground">Loading…</p> : null}
           {watches !== null && watches.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No watchers yet.</p>
+            <p className="rounded-xl bg-surface px-4 py-6 text-center text-muted-foreground">
+              No watchers yet. Ask Claude: “Alert me when NIFTY crosses 25,000.”
+            </p>
           ) : null}
           {live.map((w) => (
             <WatchCard key={w.id} onChanged={patch} watch={w} />
           ))}
           {done.length > 0 ? (
             <>
-              <p className="pt-2 font-medium text-muted-foreground text-xs tracking-wider">
-                FINISHED
-              </p>
+              <p className="pt-2 text-muted-foreground text-sm">Finished</p>
               <div className="flex flex-col gap-3 opacity-70">
                 {done.map((w) => (
                   <WatchCard key={w.id} onChanged={patch} watch={w} />
@@ -154,6 +148,8 @@ export function Workspace() {
             </>
           ) : null}
         </section>
+
+        <SiteFooter />
       </div>
     </main>
   );

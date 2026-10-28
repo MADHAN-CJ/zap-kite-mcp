@@ -366,9 +366,16 @@ def test_token_expiry_marks_connection_and_pauses_watchers(h: Harness) -> None:
     listed = json.loads(mcp.tool("list_watchers")[0])["watchers"]
     assert listed[0]["status"] == "PAUSED" and listed[0]["pausedBy"] == "broker"
 
+    h.app.db.execute(
+        "INSERT INTO otps (email, code_hash, expires_at) VALUES ('old@example.com', 'x', now() - interval '8 days'), "
+        "('new@example.com', 'y', now() + interval '5 minutes')"
+    )
     report = sweep(h)
     assert report["expiryMails"] == 1
-    assert h.app.mailer.sent[-1]["subject"].startswith("Slash Markets watchers paused")
+    assert [r["email"] for r in h.app.db.query("SELECT email FROM otps ORDER BY email")] == [
+        "new@example.com"
+    ]
+    assert h.app.mailer.sent[-1]["subject"].startswith("/markets watchers paused")
     assert sweep(h)["expiryMails"] == 0
 
     h.fake.token_valid = True
@@ -493,3 +500,28 @@ def test_refresh_token_rotation(h: Harness) -> None:
         },
     )
     assert replay.status_code == 400
+
+
+def test_consent_pages_carry_the_brand(h: Harness) -> None:
+    web = httpx.Client(base_url=h.base, follow_redirects=False, timeout=10)
+    reg = web.post(
+        "/register",
+        json={"client_name": "t", "redirect_uris": ["https://client.example/cb"]},
+    )
+    client_id = reg.json()["client_id"]
+    auth = web.get(
+        "/authorize",
+        params={
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": "https://client.example/cb",
+            "code_challenge": "x" * 43,
+            "code_challenge_method": "S256",
+            "scope": "kite:read",
+        },
+    )
+    page = web.get(auth.headers["location"]).text
+    assert "Libre Baskerville" in page and "#f6d64d" in page and "#171a17" in page
+    assert '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 341 174"' in page
+    assert 'class="slash"' in page and "markets" in page
+    assert "Slash Markets" not in page and "Zap" not in page

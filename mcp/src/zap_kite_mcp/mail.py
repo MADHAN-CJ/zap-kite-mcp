@@ -5,6 +5,7 @@ import logging
 import httpx
 
 from .config import Settings
+from .emails import Email
 
 log = logging.getLogger(__name__)
 
@@ -17,10 +18,12 @@ class Mailer:
         self._client = client or httpx.Client(timeout=15.0)
         self.sent: list[dict[str, str]] = []
 
-    def send(self, to: str, subject: str, text: str) -> bool:
+    def send(self, to: str, mail: Email) -> bool:
         if not self._settings.resend_api_key:
-            log.warning("RESEND_API_KEY unset; email to %s not sent: %s", to, subject)
-            self.sent.append({"to": to, "subject": subject, "text": text})
+            log.warning("RESEND_API_KEY unset; email to %s not sent: %s", to, mail.subject)
+            self.sent.append(
+                {"to": to, "subject": mail.subject, "text": mail.text, "html": mail.html}
+            )
             return True
         try:
             r = self._client.post(
@@ -29,8 +32,9 @@ class Mailer:
                 json={
                     "from": self._settings.email_from,
                     "to": [to],
-                    "subject": subject,
-                    "text": text,
+                    "subject": mail.subject,
+                    "text": mail.text,
+                    "html": mail.html,
                 },
             )
         except httpx.HTTPError as e:
