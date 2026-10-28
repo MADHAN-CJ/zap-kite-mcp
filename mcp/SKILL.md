@@ -6,13 +6,14 @@ description: Query a live Zerodha (Kite Connect) account and Indian market data 
 # /markets Kite data via Python
 
 You have one data tool: **`run_python(code)`**. It executes your Python on /markets'
-server, where the user's Kite session is already wired in through a local gateway,
-and returns whatever the script printed. The data never enters your context unless
-you print it, so for any question that needs more than one number write a script
-and **print the conclusion**, not the rows.
+server and returns whatever the script printed. The server attaches the user's Kite
+access on its own side: a script never receives, reads or sends any login detail,
+and nothing is read from the user's machine. The data never enters your context
+unless you print it, so for any question that needs more than one number write a
+script and **print the conclusion**, not the rows.
 
-Two more tools exist: `auth_status` (who is signed in, whether the Zerodha session
-is usable, the web-app link) and the watcher pair `create_watcher` / `list_watchers`.
+Two more tools exist: `auth_status` (who is signed in, whether Zerodha access is
+currently usable, the web-app link) and the watcher pair `create_watcher` / `list_watchers`.
 
 ## Model the question as a function
 
@@ -122,7 +123,7 @@ A traceback you need to fix, or a genuine follow-up question from the user. Not
 
 | Exception | Meaning | What to tell the user |
 | --- | --- | --- |
-| `TokenExpired` | The Zerodha session ended (Kite clears every session during its overnight reset, usually 05:30–07:30 IST) or the user disconnected. | Log in to Zerodha again from the /markets web app (`auth_status` gives the link). Nothing in a script can refresh it. |
+| `TokenExpired` | Zerodha access ended (Kite resets it every morning, usually 05:30–07:30 IST) or the user disconnected. | Ask the user to reconnect from the /markets web app (`auth_status` gives the link). Nothing in a script can restore it. |
 | `DataPlanMissing` | Kite returned "Insufficient permission" for candles or quotes: the Connect app lacks the market-data plan. | Account reads still work; market data needs the plan. |
 | `InstrumentNotFound` | No instrument matched the key, token or symbol. | Try `z.search_instruments(q)`. |
 | `RateLimited` / `CallBudgetExceeded` | See Mechanics. | Fetch less, batch more. |
@@ -258,7 +259,7 @@ NSE), so keep it to one or two calls and resolve keys now, hard-coding them. Its
 `{"met": true|false, "value": <number>, "detail": "<short note>"}`. It is dry-run
 once at creation and rejected if the output breaks that contract. The first check
 is a baseline and never alerts; one e-mail per not-met→met transition, at most
-every 15 minutes. When the Zerodha session ends, watchers pause and resume by
+every 15 minutes. When Zerodha access ends, watchers pause and resume by
 themselves after the next login. You cannot pause, resume or cancel: always show
 the user the returned `pageUrl`.
 
@@ -378,6 +379,6 @@ for sym, px, chg in sorted(rows, key=lambda r: -abs(r[2] or 0)):
 State prices and statistics exactly as returned; never fill a gap with an invented
 number. Say which instrument a price is from (the NSE share, the front future, a
 specific option contract) and whether the market is open. Greeks and IV are
-computed, not Kite's: say "indicative". If the session has expired, say so and
-send the user to the web app; do not ask for credentials in chat. Timestamps are
-IST.
+computed, not Kite's: say "indicative". If Zerodha access has expired, say so and
+send the user to the web app to reconnect; never ask for any login detail in chat.
+Timestamps are IST.
