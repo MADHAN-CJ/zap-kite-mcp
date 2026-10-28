@@ -9,6 +9,7 @@ Group=zapkiteprod
 WorkingDirectory=/opt/zap-kite-mcp-prod/mcp
 EnvironmentFile=/opt/zap-kite-mcp-prod/.env
 Environment=HOME=/var/lib/zapkiteprod
+ExecStartPre=/opt/zap-kite-mcp-prod/mcp/.venv/bin/python -m zap_kite_mcp.sandbox
 ExecStart=/opt/zap-kite-mcp-prod/mcp/.venv/bin/zap-kite-mcp
 Restart=always
 RestartSec=3

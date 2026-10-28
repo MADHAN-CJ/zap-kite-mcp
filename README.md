@@ -8,6 +8,11 @@ server hosts market watchers (model-authored conditions checked on a schedule wi
 emailed when they become true) and a small web app where users log in to Zerodha and manage
 watchers.
 
+Broker access is read-only; Python workspace access is not. `run_python` can create,
+overwrite, or delete persistent workspace files, so it advertises write-capable,
+potentially destructive, non-idempotent behavior. It is confined to the connected user's
+workspace and allowed Kite read endpoints. Watcher scheduling remains a separate tool.
+
 ## How it fits together
 
 | Piece | What it does |
@@ -27,6 +32,8 @@ instruments dump plus one batched quote call.
 ## Requirements
 
 - Python 3.12 and [uv](https://docs.astral.sh/uv/).
+- Native Linux and Bubblewrap for script execution (including watcher checks).
+  Execution fails closed on unsupported hosts; see [sandbox setup and validation](SANDBOX.md).
 - PostgreSQL 14 or newer.
 - A Kite Connect app on the Connect plan (market data), with its redirect URL set to
   `<web app origin>/api/broker/kite/callback`.
@@ -81,6 +88,13 @@ npm run typecheck && npm run lint && npm test && npm run build   # web app
 The Python suite runs the real server against an in-process fake Kite: OAuth login, scripts
 through the gateway, token expiry, watcher lifecycle and emails. The web tests pin the crypto formats to vectors produced by the Python
 side.
+
+## OpenAI plugin package
+
+Run `npm run plugin:openai:build` to create the curated submission ZIP under `dist/`.
+The OpenAI package keeps `run_python` and bundles the canonical skill with OAuth and
+listing metadata. See [OpenAI packaging and submission notes](OPENAI_PLUGIN.md) for
+validation and the remaining portal steps. The Claude package remains in `plugin/`.
 
 ## Licence
 

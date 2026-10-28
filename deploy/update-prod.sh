@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+command -v bwrap >/dev/null || { echo "Install bubblewrap before deploying" >&2; exit 1; }
 APP=/opt/zap-kite-mcp-prod
 export UV_PYTHON_INSTALL_DIR=/var/lib/zapkiteprod/python
 UNIT=zap-kite-mcp-prod

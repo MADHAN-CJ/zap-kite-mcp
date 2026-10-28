@@ -56,7 +56,8 @@ RULES = """Run a Python 3 script in the /markets sandbox and return what it prin
 HOW TO USE
 - Write a COMPLETE script that does `import zapkite as z`. It is pre-installed and read-only; the user's Kite session is already wired in through a local gateway, so never ask for, print or hard-code credentials. Standard library only (json, statistics, math, datetime, csv, sqlite3, collections); pandas/numpy are NOT installed.
 - Do the computation IN the script and print ONLY the compact result (a small dict via json.dumps, or a few lines). NEVER print raw candle lists, full chains or whole holdings; every printed byte lands in your context. Aggregate, filter, round.
-- Files persist in the working directory between calls: store big fetched data in a file in one script and read it back in the next.
+- Scripts can create, overwrite, or delete files in the signed-in user's persistent workspace. Files persist between calls; reuse saved data when useful. This tool changes workspace state even though access to Zerodha is read-only. Overwritten or deleted files may not be recoverable.
+- Access is limited to the connected user's allowed Kite read endpoints and isolated workspace; arbitrary network destinations are unavailable. Watcher creation and email scheduling use the separate create_watcher tool.
 - One question may need several scripts; call this tool once per script and compose the answer yourself.
 - A failing script returns its traceback as an error. Fix the code and retry; if it keeps failing, tell the user plainly what could not be done.
 - Errors explain themselves: TokenExpired means the user must log in to Zerodha again in the /markets app (sessions end every morning around 06:00 IST; call auth_status for the link). DataPlanMissing means the Kite Connect app lacks the market-data plan. CallBudgetExceeded means fetch less (batch quote keys, fewer strikes, wider intervals). RateLimited means Kite throttled the shared app key; wait a few seconds.
@@ -269,7 +270,10 @@ def build_server(app: App) -> KiteServer:
         title="Run Python against Zerodha data",
         description=description,
         annotations=ToolAnnotations(
-            read_only_hint=True, destructive_hint=False, open_world_hint=True
+            read_only_hint=False,
+            destructive_hint=True,
+            idempotent_hint=False,
+            open_world_hint=False,
         ),
         meta=OAUTH_SCHEME,
         structured_output=False,

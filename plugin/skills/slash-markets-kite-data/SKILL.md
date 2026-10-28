@@ -115,8 +115,16 @@ A traceback you need to fix, or a genuine follow-up question from the user. Not
 - Kite rate limits are shared by every /markets user on one app key: quotes 1 request/s,
   candles 3/s. `RateLimited` means wait a few seconds, not retry in a loop.
 - `print(z.help_api())` lists every function with its first doc line.
-- Everything is read-only. There is no order placement, modification or
-  cancellation anywhere. If asked to trade, say so; the user trades in Kite.
+- Zerodha access is read-only: there is no order placement, modification or
+  cancellation. If asked to trade, say so; the user trades in Kite.
+- `run_python` can create, overwrite, or delete files in the user's persistent
+  workspace. It is therefore a write-capable, potentially destructive tool;
+  overwritten or deleted files may not be recoverable. Limit file changes to
+  the requested analysis and preserve existing files unless changing them is
+  necessary and authorized. Arbitrary network access is unavailable; the gateway
+  is limited to the connected user's allowed Kite read endpoints.
+- Use `create_watcher` for scheduled checks and emails; `run_python` does not
+  create watchers or schedule notifications.
 
 ## Errors that mean something
 

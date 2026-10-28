@@ -7,6 +7,7 @@ import logging
 import os
 import secrets
 import socket
+import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -340,7 +341,7 @@ def test_oauth_login_and_tools_before_connecting(h: Harness) -> None:
         assert spec["title"] and len(spec["name"]) <= 64
         assert hints.get("readOnlyHint") is True or hints.get("destructiveHint") is not None
     read_only = {s["name"] for s in mcp.tool_specs() if s["annotations"].get("readOnlyHint")}
-    assert read_only == {"run_python", "auth_status", "profile", "list_watchers"}
+    assert read_only == {"auth_status", "profile", "list_watchers"}
     status = json.loads(mcp.tool("auth_status")[0])
     assert (
         status["signedIn"] and status["email"] == DEV_EMAIL and status["broker"] == "not_connected"
@@ -354,6 +355,7 @@ def test_oauth_login_and_tools_before_connecting(h: Harness) -> None:
     assert "not connected" in text and json.loads(text)["created"] is False
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Script execution requires Linux sandbox")
 def test_kite_connect_and_run_python_through_gateway(h: Harness) -> None:
     connect_kite(h)
     mcp = Mcp(h.base, oauth_login(h))
@@ -394,6 +396,7 @@ def test_gateway_rejects_bad_tokens_and_writes(h: Harness) -> None:
     assert r.status_code == 403 and "not a read endpoint" in r.text
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Script execution requires Linux sandbox")
 def test_token_expiry_marks_connection_and_pauses_watchers(h: Harness) -> None:
     connect_kite(h)
     mcp = Mcp(h.base, oauth_login(h))
@@ -432,6 +435,7 @@ def test_token_expiry_marks_connection_and_pauses_watchers(h: Harness) -> None:
     assert json.loads(mcp.tool("auth_status")[0])["broker"] == "active"
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Script execution requires Linux sandbox")
 def test_watcher_lifecycle(h: Harness) -> None:
     connect_kite(h)
     mcp = Mcp(h.base, oauth_login(h))
@@ -706,6 +710,12 @@ def test_tool_specs_and_structured_results_for_chatgpt(h: Harness) -> None:
     for name in ("auth_status", "profile", "create_watcher", "list_watchers"):
         assert specs[name]["outputSchema"]["type"] == "object", name
     assert "outputSchema" not in specs["run_python"]
+    # Inspect the actual tools/list response: clients use these hints for safeguards.
+    run_hints = specs["run_python"]["annotations"]
+    assert run_hints["readOnlyHint"] is False
+    assert run_hints["destructiveHint"] is True
+    assert run_hints["idempotentHint"] is False
+    assert run_hints["openWorldHint"] is False
     profile = specs["profile"]
     assert profile["_meta"]["openai/profile"] is True
     assert profile["outputSchema"]["additionalProperties"] is False
@@ -728,6 +738,7 @@ def test_tool_specs_and_structured_results_for_chatgpt(h: Harness) -> None:
     assert res["structuredContent"]["watchers"] == [] and res["structuredContent"]["pageUrl"]
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Script execution requires Linux sandbox")
 def test_openai_host_gets_a_shorter_script_timeout(h: Harness) -> None:
     connect_kite(h)
     mcp = Mcp(h.base, oauth_login(h))
