@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightLeftIcon } from "lucide-react";
+import { ArrowRightLeftIcon, ChevronDownIcon } from "lucide-react";
 import Script from "next/script";
 import { useEffect, useId, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 const PUBLISHER_JS = "https://kite.trade/publisher.js?v=3";
 
 const selectClass =
-  "min-h-[50px] w-full rounded-full border border-input bg-[#fffef9] px-5 text-base text-foreground outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/25";
+  "min-h-[50px] w-full appearance-none rounded-full border border-input bg-[#fffef9] py-0 pr-11 pl-5 text-base text-foreground outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/25";
 
 function Field({
   id,
@@ -55,18 +55,21 @@ function Select<T extends string>({
   readonly onChange: (next: T) => void;
 }) {
   return (
-    <select
-      className={selectClass}
-      id={id}
-      onChange={(e) => onChange(e.target.value as T)}
-      value={value}
-    >
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
+    <span className="relative block">
+      <select
+        className={selectClass}
+        id={id}
+        onChange={(e) => onChange(e.target.value as T)}
+        value={value}
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      <ChevronDownIcon className="pointer-events-none absolute top-1/2 right-4 size-4 -translate-y-1/2 text-muted-foreground" />
+    </span>
   );
 }
 
