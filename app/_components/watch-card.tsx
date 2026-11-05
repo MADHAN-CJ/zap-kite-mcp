@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { mutateWatch, type WatchAction, type WatchSummary } from "@/lib/client/api";
-import { exchangeForMarket, splitSymbol, tradePath } from "@/lib/client/kite-publisher";
+import { type TradeForm, tradeFormFor, tradePath } from "@/lib/client/kite-publisher";
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -50,9 +50,11 @@ const when = (iso: string) =>
 export function WatchCard({
   watch,
   onChanged,
+  onTrade,
 }: {
   readonly watch: WatchSummary;
   readonly onChanged: (updated: WatchSummary) => void;
+  readonly onTrade: (form: TradeForm) => void;
 }) {
   const [busy, setBusy] = useState<WatchAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +77,7 @@ export function WatchCard({
   const alerted = timeAgo(watch.lastAlertAt);
   const reason =
     watch.status === "ERROR" || watch.pausedBy === "broker" ? watch.statusReason : null;
+  const trade = tradeFormFor(watch.symbol, watch.market);
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl border bg-card p-4">
@@ -118,7 +121,11 @@ export function WatchCard({
       <div className="flex flex-wrap items-center gap-2">
         <Button asChild size="xs" variant="outline">
           <Link
-            href={tradePath(splitSymbol(watch.symbol, exchangeForMarket(watch.market)))}
+            href={tradePath(trade)}
+            onClick={(e) => {
+              e.preventDefault();
+              onTrade(trade);
+            }}
             scroll={false}
           >
             <ArrowRightLeftIcon /> Trade on Kite

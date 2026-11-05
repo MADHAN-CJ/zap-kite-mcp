@@ -85,6 +85,11 @@ export function splitSymbol(
     : { exchange: fallback, tradingsymbol: symbol.trim().toUpperCase() };
 }
 
+/** The form a watcher's Trade button opens: its symbol split into exchange and trading symbol. */
+export function tradeFormFor(symbol: string, market: string): TradeForm {
+  return { ...EMPTY_FORM, ...splitSymbol(symbol, exchangeForMarket(market)) };
+}
+
 /** Builds the home-page deep link (path and query) that opens the card pre-filled. */
 export function tradePath(form: Partial<TradeForm> & { tradingsymbol: string }): string {
   const url = new URL("/", "http://x");

@@ -12,7 +12,7 @@ import {
   SessionExpiredError,
   type WatchSummary,
 } from "@/lib/client/api";
-import { prefillFromParams } from "@/lib/client/kite-publisher";
+import { prefillFromParams, type TradeForm } from "@/lib/client/kite-publisher";
 import { clearSession, getUser, isLoggedIn } from "@/lib/client/session";
 import { BrokerCard } from "./broker-card";
 import { KiteTradeCard } from "./kite-trade-card";
@@ -31,6 +31,7 @@ export function Workspace() {
   const [notice, setNotice] = useState<string | null>(null);
   const router = useRouter();
   const params = useSearchParams();
+  const [clicked, setClicked] = useState<TradeForm | null>(null);
   const prefill = useMemo(() => prefillFromParams(params), [params]);
 
   const signOut = useCallback(() => {
@@ -116,7 +117,7 @@ export function Workspace() {
 
         <BrokerCard onChanged={setBroker} onError={fail} status={broker} />
 
-        <KiteTradeCard apiKey={broker?.publisherApiKey ?? null} prefill={prefill} />
+        <KiteTradeCard apiKey={broker?.publisherApiKey ?? null} prefill={clicked ?? prefill} />
 
         {MCP_URL ? (
           <p className="text-muted-foreground text-sm">
@@ -142,14 +143,14 @@ export function Workspace() {
             </p>
           ) : null}
           {live.map((w) => (
-            <WatchCard key={w.id} onChanged={patch} watch={w} />
+            <WatchCard key={w.id} onChanged={patch} onTrade={setClicked} watch={w} />
           ))}
           {done.length > 0 ? (
             <>
               <p className="pt-2 text-muted-foreground text-sm">Finished</p>
               <div className="flex flex-col gap-3 opacity-70">
                 {done.map((w) => (
-                  <WatchCard key={w.id} onChanged={patch} watch={w} />
+                  <WatchCard key={w.id} onChanged={patch} onTrade={setClicked} watch={w} />
                 ))}
               </div>
             </>
