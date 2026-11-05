@@ -1,0 +1,11 @@
+# AppArmor profile for bubblewrap on Ubuntu 24.04+, where
+# kernel.apparmor_restrict_unprivileged_userns=1 strips the capabilities an unconfined bwrap
+# needs to set up its loopback device and uid map ("Failed RTM_NEWADDR: Operation not permitted").
+# This grants user namespaces to /usr/bin/bwrap alone; the sandbox child is still confined by
+# bwrap itself (--unshare-all --disable-userns --cap-drop ALL). Installed by setup-prod.sh.
+abi <abi/4.0>,
+include <tunables/global>
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}

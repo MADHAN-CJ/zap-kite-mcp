@@ -5,6 +5,11 @@ if ! command -v bwrap >/dev/null; then
   apt-get update
   apt-get install -y bubblewrap
 fi
+# Ubuntu 24.04+ restricts unprivileged user namespaces; bwrap needs an AppArmor profile granting them.
+if [ "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)" = 1 ]; then
+  install -m 644 "$(dirname "$0")/apparmor-bwrap" /etc/apparmor.d/bwrap
+  apparmor_parser -r /etc/apparmor.d/bwrap
+fi
 APP=/opt/zap-kite-mcp-prod
 STATE=/var/lib/zapkiteprod
 USER_NAME=zapkiteprod
