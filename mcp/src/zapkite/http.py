@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -95,7 +96,11 @@ class GatewayTransport:
             raise GatewayError("ZAPKITE_GATEWAY_URL and ZAPKITE_RUN_TOKEN are required")
         self.base_url = gateway_url.rstrip("/")
         self._headers = {"Authorization": f"Bearer {run_token}"}
-        self._client = client or httpx.Client()
+        socket_path = os.environ.get("ZAPKITE_GATEWAY_SOCKET")
+        self._client = client or httpx.Client(
+            transport=httpx.HTTPTransport(uds=socket_path) if socket_path else None,
+            trust_env=False,
+        )
 
     def get(self, path: str, params: Params, timeout_s: float) -> Response:
         r = self._client.get(

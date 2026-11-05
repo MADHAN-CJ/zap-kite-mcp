@@ -6,6 +6,7 @@ import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlencode
 
 from zapkite.config import IST
 from zapkite.markets import HOURS, hours_for, is_open
@@ -43,6 +44,15 @@ BROKER_REASONS = {
     ),
     "disconnected": "Zerodha is disconnected. Log in again in the /markets app, then resume.",
 }
+
+
+KITE_EXCHANGES = frozenset({"NSE", "BSE", "NFO", "BFO", "CDS", "MCX"})
+
+
+def trade_query(symbol: str, market: str) -> str:
+    """Query string of the web app's "Trade on Kite" deep link, pre-filled for a watcher."""
+    exchange = market.upper() if market.upper() in KITE_EXCHANGES else "NSE"
+    return urlencode({"trade": "1", "exchange": exchange, "tradingsymbol": symbol.upper()})
 
 
 def infer_market(script: str, market: str | None) -> str:
@@ -128,6 +138,9 @@ class Watchers:
     @property
     def page_url(self) -> str:
         return self._settings.app_url
+
+    def trade_url(self, symbol: str, market: str) -> str:
+        return f"{self.page_url.rstrip('/')}/?{trade_query(symbol, market)}"
 
     def _update(self, wid: str, **fields: Any) -> None:
         cols = ", ".join(f"{k} = %s" for k in fields)
@@ -348,6 +361,7 @@ class Watchers:
             _now().astimezone(IST).strftime("%d %b %Y, %H:%M IST"),
             self.page_url,
             LOGOMARK_PATHS,
+            trade_url=self.trade_url(str(row["symbol"]), str(row["market"])),
         )
         return self._mailer.send(email, mail)
 

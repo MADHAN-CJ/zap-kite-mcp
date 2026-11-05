@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "slash-markets": {
+      "type": "http",
+      "url": "https://mcp.slash.markets/"
+    }
+  }
+}

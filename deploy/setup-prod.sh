@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Required execution boundary; no unsandboxed fallback.
+if ! command -v bwrap >/dev/null; then
+  apt-get update
+  apt-get install -y bubblewrap
+fi
 APP=/opt/zap-kite-mcp-prod
 STATE=/var/lib/zapkiteprod
 USER_NAME=zapkiteprod

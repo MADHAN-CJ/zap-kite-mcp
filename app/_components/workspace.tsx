@@ -2,7 +2,7 @@
 
 import { LogOutIcon, RadarIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BrandHeader, MarketsLabel } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,8 +12,10 @@ import {
   SessionExpiredError,
   type WatchSummary,
 } from "@/lib/client/api";
+import { prefillFromParams } from "@/lib/client/kite-publisher";
 import { clearSession, getUser, isLoggedIn } from "@/lib/client/session";
 import { BrokerCard } from "./broker-card";
+import { KiteTradeCard } from "./kite-trade-card";
 import { Login } from "./login";
 import { SiteFooter } from "./site-footer";
 import { WatchCard } from "./watch-card";
@@ -29,6 +31,7 @@ export function Workspace() {
   const [notice, setNotice] = useState<string | null>(null);
   const router = useRouter();
   const params = useSearchParams();
+  const prefill = useMemo(() => prefillFromParams(params), [params]);
 
   const signOut = useCallback(() => {
     clearSession();
@@ -75,7 +78,9 @@ export function Workspace() {
     const err = params.get("error");
     if (!connected && !err) return;
     setNotice(
-      connected ? "Zerodha connected. Claude can read this account until the session ends." : null,
+      connected
+        ? "Zerodha connected. Your AI assistant can read this account until the session ends."
+        : null,
     );
     setError(err);
     router.replace("/");
@@ -111,9 +116,11 @@ export function Workspace() {
 
         <BrokerCard onChanged={setBroker} onError={fail} status={broker} />
 
+        <KiteTradeCard apiKey={broker?.publisherApiKey ?? null} prefill={prefill} />
+
         {MCP_URL ? (
           <p className="text-muted-foreground text-sm">
-            Add <MarketsLabel /> to Claude as a connector with{" "}
+            Add <MarketsLabel /> to Claude or ChatGPT as a connector with{" "}
             <code className="font-mono text-[15px]">{MCP_URL}</code>
           </p>
         ) : null}
@@ -125,13 +132,13 @@ export function Workspace() {
             </h2>
             <p className="text-muted-foreground">
               Checks your AI set up for you. They run during market hours and email you when a
-              condition becomes true. Ask Claude to create one.
+              condition becomes true. Ask your AI assistant to create one.
             </p>
           </div>
           {watches === null && !error ? <p className="text-muted-foreground">Loading…</p> : null}
           {watches !== null && watches.length === 0 ? (
             <p className="rounded-xl bg-surface px-4 py-6 text-center text-muted-foreground">
-              No watchers yet. Ask Claude: “Alert me when NIFTY crosses 25,000.”
+              No watchers yet. Ask your AI: “Alert me when NIFTY crosses 25,000.”
             </p>
           ) : null}
           {live.map((w) => (

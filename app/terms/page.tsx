@@ -4,7 +4,7 @@ import { LegalPage, type LegalSection, legalMetadata } from "../_components/lega
 
 export const metadata = legalMetadata(
   "Terms of Service",
-  "The terms that govern your use of /markets: a read-only market data and alerting service for Claude and ChatGPT.",
+  "The terms that govern your use of /markets: a market data and alerting service for Claude and ChatGPT that never places orders for you.",
 );
 
 const P = ({ children }: { readonly children: string }) => (
@@ -93,10 +93,12 @@ const sections: readonly LegalSection[] = [
           feed, except as Zerodha and the relevant exchanges permit.
         </p>
         <p>
-          <strong>The Service is read-only.</strong> It contains no facility to place, modify or
-          cancel orders, transfer funds, or change any setting of your Zerodha account, and it does
-          not authorise your AI assistant to do so. You remain solely responsible for every order
-          you place through any channel.
+          <strong>The Service never places orders for you.</strong> Neither the Service nor your AI
+          assistant can place, modify or cancel orders, transfer funds, or change any setting of
+          your Zerodha account. The "Trade on Kite" button only opens Zerodha's own Kite Publisher
+          window, pre-filled with values you chose; you log in to Zerodha there, review the order
+          and place it yourself, under Zerodha's terms. You remain solely responsible for every
+          order you place through any channel.
         </p>
       </>
     ),
@@ -383,8 +385,9 @@ export default function TermsPage() {
           <p>
             In short: <MarketsLabel /> lets an AI assistant you already use read your Zerodha
             account and Indian market data, and emails you when a condition you set becomes true. It
-            is read-only and can never trade. It is a research tool, not investment advice. You
-            decide what to do with what it shows you.
+            never places orders for you; any trade is placed by you, in Zerodha's own Kite window.
+            It is a research tool, not investment advice. You decide what to do with what it shows
+            you.
           </p>
           <p>The full terms below are what actually applies.</p>
         </>

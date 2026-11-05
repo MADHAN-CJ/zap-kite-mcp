@@ -7,6 +7,7 @@ import csv
 import io
 import os
 import sqlite3
+import tempfile
 import threading
 from typing import Any
 
@@ -115,18 +116,28 @@ def _parse(csv_text: str) -> list[tuple[Any, ...]]:
 
 
 def _build(path: str) -> None:
-    tmp = f"{path}.{os.getpid()}.tmp"
     rows = _parse(client.instruments_csv())
-    if os.path.exists(tmp):
-        os.remove(tmp)
-    con = sqlite3.connect(tmp)
+    # PIDs repeat across sandbox namespaces; reserve a unique file atomically.
+    fd, tmp = tempfile.mkstemp(
+        prefix=os.path.basename(path) + ".",
+        suffix=".tmp",
+        dir=os.path.dirname(os.path.abspath(path)),
+    )
+    os.close(fd)
     try:
-        con.executescript(_SCHEMA)
-        con.executemany(f"INSERT INTO instruments VALUES ({','.join('?' * len(_COLUMNS))})", rows)
-        con.commit()
+        con = sqlite3.connect(tmp)
+        try:
+            con.executescript(_SCHEMA)
+            con.executemany(
+                f"INSERT INTO instruments VALUES ({','.join('?' * len(_COLUMNS))})", rows
+            )
+            con.commit()
+        finally:
+            con.close()
+        os.replace(tmp, path)
     finally:
-        con.close()
-    os.replace(tmp, path)
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(tmp)
 
 
 def _prune(cache_dir: str, keep: str) -> None:

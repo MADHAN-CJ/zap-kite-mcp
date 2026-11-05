@@ -10,7 +10,12 @@ export interface BrokerStatus {
   userName: string | null;
   connectedAt: string | null;
   expiresAt: string | null;
+  /** Public api_key for Zerodha's Kite Publisher button (never a secret). */
+  publisherApiKey: string | null;
 }
+
+const publisherApiKey = () =>
+  process.env.KITE_PUBLISHER_API_KEY || process.env.KITE_API_KEY || null;
 
 interface Row {
   status: BrokerStatusValue;
@@ -33,6 +38,7 @@ export async function brokerStatus(userId: string): Promise<BrokerStatus> {
       userName: null,
       connectedAt: null,
       expiresAt: null,
+      publisherApiKey: publisherApiKey(),
     };
   }
   return {
@@ -41,6 +47,7 @@ export async function brokerStatus(userId: string): Promise<BrokerStatus> {
     userName: row.user_name,
     connectedAt: row.connected_at.toISOString(),
     expiresAt: row.expires_at?.toISOString() ?? null,
+    publisherApiKey: publisherApiKey(),
   };
 }
 

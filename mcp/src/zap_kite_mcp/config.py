@@ -53,6 +53,7 @@ class Settings:
     state_dir: Path
     script_timeout_s: int
     script_max_timeout_s: int
+    script_timeout_openai_s: int
     max_output_bytes: int
     max_concurrent_runs: int
     call_budget: int
@@ -61,6 +62,7 @@ class Settings:
     dev_login_email: str
     dev_login_code: str
     risk_free_rate: str
+    openai_apps_challenge: str
 
     @property
     def mcp_url(self) -> str:
@@ -102,6 +104,7 @@ def load_settings() -> Settings:
         state_dir=state_dir,
         script_timeout_s=_int("SCRIPT_TIMEOUT_SECONDS", 60),
         script_max_timeout_s=_int("SCRIPT_MAX_TIMEOUT_SECONDS", 180),
+        script_timeout_openai_s=_int("SCRIPT_TIMEOUT_OPENAI_SECONDS", 50),
         max_output_bytes=_int("SCRIPT_MAX_OUTPUT_BYTES", 64 * 1024),
         max_concurrent_runs=_int("MAX_CONCURRENT_RUNS", 2),
         call_budget=_int("ZAPKITE_CALL_BUDGET", 40),
@@ -110,4 +113,5 @@ def load_settings() -> Settings:
         dev_login_email=_env("DEV_LOGIN_EMAIL").lower(),
         dev_login_code=_env("DEV_LOGIN_CODE"),
         risk_free_rate=_env("ZAPKITE_RISK_FREE_RATE"),
+        openai_apps_challenge=_env("OPENAI_APPS_CHALLENGE_TOKEN"),
     )

@@ -9,6 +9,7 @@ Group=zapkiteprod
 WorkingDirectory=/opt/zap-kite-mcp-prod/mcp
 EnvironmentFile=/opt/zap-kite-mcp-prod/.env
 Environment=HOME=/var/lib/zapkiteprod
+ExecStartPre=/opt/zap-kite-mcp-prod/mcp/.venv/bin/python -m zap_kite_mcp.sandbox
 ExecStart=/opt/zap-kite-mcp-prod/mcp/.venv/bin/zap-kite-mcp
 Restart=always
 RestartSec=3
@@ -22,8 +23,10 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 InaccessiblePaths=-/var/www -/etc/nginx -/etc/letsencrypt -/opt/zap-claude-mcp -/opt/zap-eve-mcp
-ReadWritePaths=/var/lib/zapkiteprod
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# /proc/sys/user: bwrap --disable-userns sets max_user_namespaces=0 for its child user namespace.
+ReadWritePaths=/var/lib/zapkiteprod /proc/sys/user
+# AF_NETLINK: bwrap --unshare-net configures loopback inside the new network namespace.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 LockPersonality=true
 MemoryMax=1G
 CPUQuota=200%

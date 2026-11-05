@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "slash-markets": {
+      "url": "https://mcp.slash.markets/",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "cimd"
+            },
+            "baseScopes": ["kite:read", "openid", "email"]
+          }
+        }
+      }
+    }
+  }
+}

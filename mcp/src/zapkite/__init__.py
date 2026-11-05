@@ -1,4 +1,4 @@
-"""Read-only Python library over Zerodha Kite Connect, used by scripts Claude writes."""
+"""Read-only Python library over Zerodha Kite Connect, used by scripts the AI assistant writes."""
 
 from .api import *  # noqa: F403
 from .api import __all__ as _api_all

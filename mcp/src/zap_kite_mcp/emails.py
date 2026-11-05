@@ -85,14 +85,17 @@ def login_code(code: str, logomark_paths: str = "") -> Email:
             "If you didn't request it, ignore this email. Nobody can use the code without your inbox."
         )
     )
-    footer = "/markets is read-only. It can never place, change or cancel an order."
+    footer = (
+        "/markets never places, changes or cancels an order for you. You trade on Zerodha's Kite."
+    )
     return Email(
         subject=f"{code} is your /markets login code",
         html=_shell(f"Your login code is {code}", "Your login code", body, footer, logomark_paths),
         text=(
             f"Your /markets login code is {code}. It expires in 10 minutes.\n\n"
             "If you didn't request it, ignore this email.\n\n"
-            "/markets is read-only. It can never place, change or cancel an order."
+            "/markets never places, changes or cancels an order for you. "
+            "You trade on Zerodha's Kite."
         ),
     )
 
@@ -105,6 +108,8 @@ def watcher_alert(
     when: str,
     page_url: str,
     logomark_paths: str = "",
+    *,
+    trade_url: str | None = None,
 ) -> Email:
     rows = [("Condition", label)]
     if value is not None:
@@ -126,8 +131,16 @@ def watcher_alert(
         + f'<table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px;font-size:16px">{table}</table>'
         + _p(_button("Manage watchers", page_url))
     )
+    text_trade = ""
+    if trade_url:
+        body += _p(_button("Trade on Kite", trade_url)) + _muted(
+            "Trade on Kite opens Zerodha's own order window pre-filled with this symbol; you log "
+            "in there, review and place the order yourself. Open it in Safari or Chrome, not an "
+            "in-app browser."
+        )
+        text_trade = f"Trade on Kite (opens Zerodha's own order window): {trade_url}\n\n"
     footer = (
-        "/markets is read-only; it can never trade. "
+        "/markets never places orders for you; you trade on Zerodha's Kite. "
         "This watcher alerts again only after the condition resets."
     )
     text_rows = "\n".join(f"{k}: {v}" for k, v in rows)
@@ -142,7 +155,7 @@ def watcher_alert(
         ),
         text=(
             f"Your watcher on {symbol} just triggered.\n\n{text_rows}\n\n"
-            f"Manage your watchers: {page_url}\n\n{footer}"
+            f"Manage your watchers: {page_url}\n\n{text_trade}{footer}"
         ),
     )
 
@@ -151,12 +164,12 @@ def session_paused(page_url: str, logomark_paths: str = "") -> Email:
     body = (
         _p(
             "Zerodha ends every session during its overnight reset, so your /markets watchers "
-            "are paused and Claude can't read your account until you log in again."
+            "are paused and your AI assistant can't read your account until you log in again."
         )
         + _p(_button("Log in to Zerodha", page_url))
         + _muted("Watchers resume by themselves after you log in. Nothing else to do.")
     )
-    footer = "/markets is read-only; it can never trade."
+    footer = "/markets never places orders for you; you trade on Zerodha's Kite."
     return Email(
         subject="/markets watchers paused: log in to Zerodha again",
         html=_shell(

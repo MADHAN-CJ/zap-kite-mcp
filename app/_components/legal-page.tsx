@@ -38,6 +38,9 @@ export function LegalPage({
             <Link className="text-muted-foreground hover:text-foreground" href="/privacy">
               Privacy
             </Link>
+            <Link className="text-muted-foreground hover:text-foreground" href="/support">
+              Support
+            </Link>
           </nav>
         </header>
 

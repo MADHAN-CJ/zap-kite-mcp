@@ -1,4 +1,4 @@
-"""The functions Claude's scripts call. Signatures and first doc lines are the published schema."""
+"""The functions the model's scripts call. Signatures and first doc lines are the schema."""
 
 from __future__ import annotations
 

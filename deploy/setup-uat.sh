@@ -2,6 +2,11 @@
 # One-time setup on the shared uat box (run as root): service user, clone, venv, state dir,
 # systemd unit, .env skeleton with fresh secrets, nginx reminder. Re-runnable.
 set -euo pipefail
+# Required execution boundary; no unsandboxed fallback.
+if ! command -v bwrap >/dev/null; then
+  apt-get update
+  apt-get install -y bubblewrap
+fi
 APP=/opt/zap-kite-mcp
 export UV_PYTHON_INSTALL_DIR=/var/lib/zapkite/python
 REPO=https://github.com/MADHAN-CJ/zap-kite-mcp.git
