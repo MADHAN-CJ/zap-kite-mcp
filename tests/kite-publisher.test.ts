@@ -3,6 +3,7 @@ import {
   EMPTY_FORM,
   exchangeForMarket,
   prefillFromParams,
+  splitSymbol,
   tradePath,
   validate,
 } from "@/lib/client/kite-publisher";
@@ -74,6 +75,21 @@ describe("Kite Publisher order form", () => {
     expect(exchangeForMarket("NFO")).toBe("NFO");
     expect(exchangeForMarket("mcx")).toBe("MCX");
     expect(exchangeForMarket("BCD")).toBe("NSE");
+  });
+
+  it("splits Kite quote keys into exchange and trading symbol", () => {
+    expect(splitSymbol("NSE:GOLDBEES", "MCX")).toEqual({
+      exchange: "NSE",
+      tradingsymbol: "GOLDBEES",
+    });
+    expect(splitSymbol("goldbees", "NSE")).toEqual({ exchange: "NSE", tradingsymbol: "GOLDBEES" });
+    expect(splitSymbol("NIFTY 50", "NSE")).toEqual({ exchange: "NSE", tradingsymbol: "NIFTY 50" });
+    expect(tradePath(splitSymbol("NFO:NIFTY25NOV24700CE", "NSE"))).toContain(
+      "exchange=NFO&tradingsymbol=NIFTY25NOV24700CE",
+    );
+    expect(
+      prefillFromParams(new URLSearchParams("trade=1&tradingsymbol=BSE:SENSEX")),
+    ).toMatchObject({ exchange: "BSE", tradingsymbol: "SENSEX" });
   });
 
   it("ignores unrelated query strings and falls back on bad values", () => {

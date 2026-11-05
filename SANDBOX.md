@@ -3,10 +3,13 @@
 Script execution now requires native Linux with Bubblewrap (`bwrap`) supporting
 `--disable-userns` (bubblewrap >= 0.8.0: Ubuntu 24.04 / Debian 12 or newer; Ubuntu
 22.x ships 0.6 and cannot run the sandbox). Under systemd, bwrap also needs
-`AF_NETLINK` in `RestrictAddressFamilies` (loopback in the new network namespace)
-and `/proc/sys/user` in `ReadWritePaths` (`--disable-userns` writes
-`/proc/sys/user/max_user_namespaces` for its child user namespace; `ProtectKernelTunables`
-stays on for everything else). A uv virtualenv's `bin/python` points into an
+`AF_NETLINK` in `RestrictAddressFamilies` (loopback in the new network namespace).
+`--disable-userns` writes `/proc/sys/user/max_user_namespaces` for its child user namespace,
+so `/proc/sys` must be writable from the service's view: on kernel 5.19 (uat) that works with
+`ProtectKernelTunables=true` plus `/proc/sys/user` in `ReadWritePaths`, but on kernel 6.8
+(Ubuntu 24.04, prod) any overmount inside `/proc` makes the user namespace refuse to mount a
+fresh procfs (`bwrap: Can't mount proc on /newroot/proc: Operation not permitted`), so the
+prod unit sets neither. The service is unprivileged and cannot write kernel tunables anyway. A uv virtualenv's `bin/python` points into an
 unversioned alias directory; the sandbox recreates those symlink hops with `--symlink`. There is no host-Python fallback, including on macOS. Run the
 MCP execution service in a Linux development VM when developing on a Mac.
 
@@ -74,3 +77,15 @@ Existing `<state>/workspace/<user>/_runs` archives are not migrated or deleted b
 change; address their retention when fixing finding 9.
 
 Implementation reference: [Bubblewrap documentation](https://github.com/containers/bubblewrap/blob/main/bwrap.xml).
+
+## Ubuntu 24.04 and newer: AppArmor user-namespace restriction
+
+`kernel.apparmor_restrict_unprivileged_userns=1` (default since 24.04) moves an unconfined
+`bwrap` that creates a user namespace into the kernel's `unprivileged_userns` profile, which
+strips the capabilities bwrap needs to configure its loopback device and uid map. Symptoms:
+`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`, `setting up uid map: Permission
+denied`, and the unit failing at `ExecStartPre` (sandbox preflight). `deploy/setup-prod.sh`
+installs `/etc/apparmor.d/bwrap`, a profile that grants `userns` to `/usr/bin/bwrap` only
+(`flags=(unconfined)` + `userns,`). Do not disable the sysctl machine-wide; the sandbox child is
+still confined by bwrap's own `--unshare-all --disable-userns --cap-drop ALL`.
+

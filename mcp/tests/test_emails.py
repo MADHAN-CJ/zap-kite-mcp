@@ -71,3 +71,12 @@ def test_session_paused_email() -> None:
 def test_escapes_user_content() -> None:
     m = watcher_alert("<b>X</b>", "a & b", None, None, "t", "https://app")
     assert "&lt;b&gt;X&lt;/b&gt;" in m.html and "a &amp; b" in m.html and "<b>X</b>" not in m.html
+
+
+def test_trade_query_splits_kite_quote_keys() -> None:
+    from zap_kite_mcp.watchers import trade_query
+
+    assert trade_query("NSE:GOLDBEES", "MCX") == "trade=1&exchange=NSE&tradingsymbol=GOLDBEES"
+    assert trade_query("goldbees", "nse") == "trade=1&exchange=NSE&tradingsymbol=GOLDBEES"
+    assert trade_query("GOLD", "BCD") == "trade=1&exchange=NSE&tradingsymbol=GOLD"
+    assert trade_query("NFO:NIFTY25NOV24700CE", "NFO").endswith("tradingsymbol=NIFTY25NOV24700CE")

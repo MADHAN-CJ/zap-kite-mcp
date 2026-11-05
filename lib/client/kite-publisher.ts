@@ -45,15 +45,19 @@ const oneOf = <T extends string>(values: readonly T[], raw: string | null): T | 
 
 /** Reads a deep link such as `/?trade=1&exchange=NSE&tradingsymbol=INFY&side=BUY&quantity=5`. */
 export function prefillFromParams(params: URLSearchParams): TradeForm | null {
-  const tradingsymbol = params.get("tradingsymbol")?.trim().toUpperCase() ?? "";
-  if (!params.has("trade") && !tradingsymbol) return null;
+  const raw = params.get("tradingsymbol") ?? "";
+  if (!params.has("trade") && !raw.trim()) return null;
+  const { exchange, tradingsymbol } = splitSymbol(
+    raw,
+    oneOf(EXCHANGES, params.get("exchange")) ?? EMPTY_FORM.exchange,
+  );
   const orderType = oneOf(ORDER_TYPES, params.get("order_type")) ?? EMPTY_FORM.orderType;
   const num = (key: string) => {
     const v = params.get(key)?.trim() ?? "";
     return v && Number.isFinite(Number(v)) ? v : "";
   };
   return {
-    exchange: oneOf(EXCHANGES, params.get("exchange")) ?? EMPTY_FORM.exchange,
+    exchange,
     tradingsymbol: tradingsymbol.slice(0, 40),
     side: oneOf(SIDES, params.get("side") ?? params.get("transaction_type")) ?? EMPTY_FORM.side,
     quantity: num("quantity") || EMPTY_FORM.quantity,
@@ -67,6 +71,18 @@ export function prefillFromParams(params: URLSearchParams): TradeForm | null {
 /** The exchange a watcher's market maps to; markets Kite does not trade on fall back to NSE. */
 export function exchangeForMarket(market: string): Exchange {
   return oneOf(EXCHANGES, market) ?? "NSE";
+}
+
+/** Splits a Kite quote key such as `NSE:GOLDBEES`; a bare symbol takes the fallback exchange. */
+export function splitSymbol(
+  symbol: string,
+  fallback: Exchange,
+): { exchange: Exchange; tradingsymbol: string } {
+  const [head, ...rest] = symbol.trim().toUpperCase().split(":");
+  const exchange = rest.length > 0 ? oneOf(EXCHANGES, head ?? null) : null;
+  return exchange
+    ? { exchange, tradingsymbol: rest.join(":") }
+    : { exchange: fallback, tradingsymbol: symbol.trim().toUpperCase() };
 }
 
 /** Builds the home-page deep link (path and query) that opens the card pre-filled. */

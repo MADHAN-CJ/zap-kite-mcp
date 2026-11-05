@@ -50,9 +50,16 @@ KITE_EXCHANGES = frozenset({"NSE", "BSE", "NFO", "BFO", "CDS", "MCX"})
 
 
 def trade_query(symbol: str, market: str) -> str:
-    """Query string of the web app's "Trade on Kite" deep link, pre-filled for a watcher."""
+    """Query string of the web app's "Trade on Kite" deep link, pre-filled for a watcher.
+
+    Watcher symbols are often Kite quote keys (``NSE:GOLDBEES``); the prefix wins over market.
+    """
     exchange = market.upper() if market.upper() in KITE_EXCHANGES else "NSE"
-    return urlencode({"trade": "1", "exchange": exchange, "tradingsymbol": symbol.upper()})
+    tradingsymbol = symbol.strip().upper()
+    head, sep, rest = tradingsymbol.partition(":")
+    if sep and head in KITE_EXCHANGES:
+        exchange, tradingsymbol = head, rest
+    return urlencode({"trade": "1", "exchange": exchange, "tradingsymbol": tradingsymbol})
 
 
 def infer_market(script: str, market: str | None) -> str:
