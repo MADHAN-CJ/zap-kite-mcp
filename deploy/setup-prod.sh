@@ -5,6 +5,22 @@ if ! command -v bwrap >/dev/null; then
   apt-get update
   apt-get install -y bubblewrap
 fi
+# Ubuntu 24.04+ (kernel.apparmor_restrict_unprivileged_userns=1) moves an unconfined bwrap into the
+# kernel's unprivileged_userns profile, which strips the capabilities it needs for its loopback
+# device and uid map ("Failed RTM_NEWADDR: Operation not permitted"). This profile grants user
+# namespaces to /usr/bin/bwrap alone; the sandbox child stays confined by bwrap itself
+# (--unshare-all --disable-userns --cap-drop ALL). See SANDBOX.md.
+if [ "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)" = 1 ]; then
+  cat > /etc/apparmor.d/bwrap <<'PROFILE'
+abi <abi/4.0>,
+include <tunables/global>
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+PROFILE
+  apparmor_parser -r /etc/apparmor.d/bwrap
+fi
 APP=/opt/zap-kite-mcp-prod
 STATE=/var/lib/zapkiteprod
 USER_NAME=zapkiteprod

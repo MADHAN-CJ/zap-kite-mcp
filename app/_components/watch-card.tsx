@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { mutateWatch, type WatchAction, type WatchSummary } from "@/lib/client/api";
-import { exchangeForMarket, tradePath } from "@/lib/client/kite-publisher";
+import { exchangeForMarket, splitSymbol, tradePath } from "@/lib/client/kite-publisher";
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -118,10 +118,7 @@ export function WatchCard({
       <div className="flex flex-wrap items-center gap-2">
         <Button asChild size="xs" variant="outline">
           <Link
-            href={tradePath({
-              exchange: exchangeForMarket(watch.market),
-              tradingsymbol: watch.symbol,
-            })}
+            href={tradePath(splitSymbol(watch.symbol, exchangeForMarket(watch.market)))}
             scroll={false}
           >
             <ArrowRightLeftIcon /> Trade on Kite
