@@ -61,8 +61,9 @@ const sections: readonly LegalSection[] = [
           happens on the account page. The first check is a baseline and never alerts.
         </p>
         <p>
-          <strong>Trading:</strong> <MarketsLabel /> is read-only and can never place, modify or
-          cancel orders. Trade in Kite.
+          <strong>Trading:</strong> <MarketsLabel /> never places, modifies or cancels orders for
+          you. The "Trade on Kite" button opens Zerodha's own Kite window, where you review and
+          place the order yourself. Open it in Safari or Chrome, not an in-app browser.
         </p>
       </>
     ),

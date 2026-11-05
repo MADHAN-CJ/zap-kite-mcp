@@ -60,8 +60,8 @@ export function Login({ onLoggedIn }: { readonly onLoggedIn: () => void }) {
             connected to the market.
           </h1>
           <p className="text-muted-foreground">
-            Sign in to connect Zerodha and manage the watchers <MarketsLabel /> keeps for you.
-            Read-only: it can never trade.
+            Sign in to connect Zerodha and manage the watchers <MarketsLabel /> keeps for you. It
+            never places orders for you; you trade on Zerodha's Kite.
           </p>
           <span className="sr-only">
             <Wordmark />

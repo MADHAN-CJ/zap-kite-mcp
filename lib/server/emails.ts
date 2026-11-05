@@ -63,7 +63,8 @@ export function loginCodeEmail(code: string): Email {
   const body =
     `<p style="margin:0 0 16px">Enter this code to sign in. It expires in 10 minutes.</p>${codeHtml}` +
     `<p style="margin:0 0 16px;color:${MUTED}">If you didn't request it, ignore this email. Nobody can use the code without your inbox.</p>`;
-  const footer = "/markets is read-only. It can never place, change or cancel an order.";
+  const footer =
+    "/markets never places, changes or cancels an order for you. You trade on Zerodha's Kite.";
   return {
     subject: `${code} is your /markets login code`,
     html: shell(`Your login code is ${code}`, "Your login code", body, footer),

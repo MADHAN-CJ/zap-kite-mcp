@@ -1,6 +1,7 @@
 "use client";
 
-import { RadarIcon } from "lucide-react";
+import { ArrowRightLeftIcon, RadarIcon } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { mutateWatch, type WatchAction, type WatchSummary } from "@/lib/client/api";
+import { exchangeForMarket, tradePath } from "@/lib/client/kite-publisher";
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -113,37 +115,50 @@ export function WatchCard({
         </ul>
       ) : null}
       {error ? <p className="text-negative text-sm">{error}</p> : null}
-      {live ? (
-        <div className="flex items-center gap-2">
-          {watch.status === "ARMED" ? (
-            <Button
-              disabled={busy !== null}
-              onClick={() => void act("pause")}
-              size="xs"
-              variant="secondary"
-            >
-              {busy === "pause" ? "Pausing…" : "Pause"}
-            </Button>
-          ) : (
-            <Button
-              disabled={busy !== null}
-              onClick={() => void act("resume")}
-              size="xs"
-              variant="secondary"
-            >
-              {busy === "resume" ? "Resuming…" : "Resume"}
-            </Button>
-          )}
-          <Button
-            disabled={busy !== null}
-            onClick={() => setConfirmCancelOpen(true)}
-            size="xs"
-            variant="destructive"
+      <div className="flex flex-wrap items-center gap-2">
+        <Button asChild size="xs" variant="outline">
+          <Link
+            href={tradePath({
+              exchange: exchangeForMarket(watch.market),
+              tradingsymbol: watch.symbol,
+            })}
+            scroll={false}
           >
-            {busy === "cancel" ? "Cancelling…" : "Cancel"}
-          </Button>
-        </div>
-      ) : null}
+            <ArrowRightLeftIcon /> Trade on Kite
+          </Link>
+        </Button>
+        {live ? (
+          <>
+            {watch.status === "ARMED" ? (
+              <Button
+                disabled={busy !== null}
+                onClick={() => void act("pause")}
+                size="xs"
+                variant="secondary"
+              >
+                {busy === "pause" ? "Pausing…" : "Pause"}
+              </Button>
+            ) : (
+              <Button
+                disabled={busy !== null}
+                onClick={() => void act("resume")}
+                size="xs"
+                variant="secondary"
+              >
+                {busy === "resume" ? "Resuming…" : "Resume"}
+              </Button>
+            )}
+            <Button
+              disabled={busy !== null}
+              onClick={() => setConfirmCancelOpen(true)}
+              size="xs"
+              variant="destructive"
+            >
+              {busy === "cancel" ? "Cancelling…" : "Cancel"}
+            </Button>
+          </>
+        ) : null}
+      </div>
 
       <Dialog onOpenChange={setConfirmCancelOpen} open={confirmCancelOpen}>
         <DialogContent>

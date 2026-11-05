@@ -13,7 +13,8 @@ export function SiteFooter({ compact = false }: { readonly compact?: boolean }) 
     >
       {compact ? null : (
         <p className="m-0">
-          <Wordmark className="text-foreground" /> is read-only. It can never trade.
+          <Wordmark className="text-foreground" /> never places orders for you. You trade on
+          Zerodha's Kite.
         </p>
       )}
       <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-1">

@@ -1,7 +1,9 @@
 # /markets
 
 Ask Claude about your Zerodha account and the Indian markets. /markets connects Claude to
-your Zerodha (Kite Connect) account in read-only mode: it can analyse, it can never trade.
+your Zerodha (Kite Connect) account in read-only mode: it can analyse, it never places orders
+for you. When you want to trade, the /markets app's "Trade on Kite" button opens Zerodha's own
+Kite window, pre-filled, where you review and place the order yourself.
 Python analysis can create, overwrite, or delete files in your persistent /markets workspace.
 Those changes are separate from your broker account; overwritten or deleted files may not
 be recoverable.

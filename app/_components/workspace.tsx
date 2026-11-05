@@ -2,7 +2,7 @@
 
 import { LogOutIcon, RadarIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BrandHeader, MarketsLabel } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,8 +12,10 @@ import {
   SessionExpiredError,
   type WatchSummary,
 } from "@/lib/client/api";
+import { prefillFromParams } from "@/lib/client/kite-publisher";
 import { clearSession, getUser, isLoggedIn } from "@/lib/client/session";
 import { BrokerCard } from "./broker-card";
+import { KiteTradeCard } from "./kite-trade-card";
 import { Login } from "./login";
 import { SiteFooter } from "./site-footer";
 import { WatchCard } from "./watch-card";
@@ -29,6 +31,7 @@ export function Workspace() {
   const [notice, setNotice] = useState<string | null>(null);
   const router = useRouter();
   const params = useSearchParams();
+  const prefill = useMemo(() => prefillFromParams(params), [params]);
 
   const signOut = useCallback(() => {
     clearSession();
@@ -112,6 +115,8 @@ export function Workspace() {
         ) : null}
 
         <BrokerCard onChanged={setBroker} onError={fail} status={broker} />
+
+        <KiteTradeCard apiKey={broker?.publisherApiKey ?? null} prefill={prefill} />
 
         {MCP_URL ? (
           <p className="text-muted-foreground text-sm">

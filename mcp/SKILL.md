@@ -116,7 +116,12 @@ A traceback you need to fix, or a genuine follow-up question from the user. Not
   candles 3/s. `RateLimited` means wait a few seconds, not retry in a loop.
 - `print(z.help_api())` lists every function with its first doc line.
 - Zerodha access is read-only: there is no order placement, modification or
-  cancellation. If asked to trade, say so; the user trades in Kite.
+  cancellation, and no tool places orders. If the user wants to trade, hand them
+  the /markets app's "Trade on Kite" link: `<appUrl>/?trade=1&exchange=NSE&tradingsymbol=INFY&side=BUY&quantity=5&product=CNC&order_type=MARKET`
+  (`appUrl` comes from `auth_status`; add `price=` for LIMIT/SL and
+  `trigger_price=` for SL/SL-M; exchange NSE/BSE/NFO/BFO/CDS/MCX). It opens
+  Zerodha's own Kite window where the user reviews and places the order
+  themselves. Tell them to open it in Safari or Chrome, not an in-app browser.
 - `run_python` can create, overwrite, or delete files in the user's persistent
   workspace. It is therefore a write-capable, potentially destructive tool;
   overwritten or deleted files may not be recoverable. Limit file changes to

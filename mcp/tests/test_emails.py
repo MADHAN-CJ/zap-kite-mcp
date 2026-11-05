@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html
+
 from zap_kite_mcp.emails import login_code, session_paused, watcher_alert
 from zap_kite_mcp.pages import LOGOMARK_PATHS
 
@@ -44,8 +46,14 @@ def test_watcher_alert_email() -> None:
     ):
         assert piece in m.html
     assert "Value: 28.9" in m.text and "https://app" in m.text
+    assert "Trade on Kite" not in m.html and "Trade on Kite" not in m.text
     m2 = watcher_alert("GOLD", "above 78500", None, None, "x", "https://app")
     assert "Value" not in m2.text and "Detail" not in m2.text
+    link = "https://app/?trade=1&exchange=MCX&tradingsymbol=GOLD"
+    m3 = watcher_alert("GOLD", "above 78500", None, None, "x", "https://app", trade_url=link)
+    assert f'href="{html.escape(link)}"' in m3.html
+    assert "Trade on Kite" in m3.html and "Safari" in m3.html
+    assert link in m3.text
 
 
 def test_session_paused_email() -> None:

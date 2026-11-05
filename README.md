@@ -1,7 +1,9 @@
 # zap-kite-mcp
 
 An MCP server that gives an AI assistant (Claude or ChatGPT) read-only access to a Zerodha Kite
-Connect account and to Indian market data through one `run_python` tool. The model writes a
+Connect account and to Indian market data through one `run_python` tool. It never places orders
+for the user: the web app's "Trade on Kite" button opens Zerodha's own Kite Publisher window,
+where the user places every order themselves. The model writes a
 Python script against the `zapkite` library, the server runs it in an isolated subprocess and
 returns only what the script printed, so large data never enters the model's context. The same
 server hosts market watchers (model-authored conditions checked on a schedule without AI tokens,

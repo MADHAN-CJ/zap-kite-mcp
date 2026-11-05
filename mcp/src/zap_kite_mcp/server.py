@@ -456,7 +456,7 @@ def build_server(app: App) -> KiteServer:
             pages.email_form(
                 f"{s.public_url}/login/email",
                 "Connect your AI assistant to your /markets account",
-                "Read-only: the assistant can analyse your Zerodha account but can never trade.",
+                "The assistant can analyse your Zerodha account but never places orders; you trade on Kite.",
                 hidden=hidden,
             ),
         )
@@ -474,7 +474,7 @@ def build_server(app: App) -> KiteServer:
             body = pages.email_form(
                 f"{s.public_url}/login/email",
                 "Connect your AI assistant to your /markets account",
-                "Read-only: the assistant can analyse your Zerodha account but can never trade.",
+                "The assistant can analyse your Zerodha account but never places orders; you trade on Kite.",
                 pages.error_box(str(e)),
                 hidden,
             )
