@@ -1,7 +1,7 @@
 {
   "name": "slash-markets",
   "displayName": "/markets",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Read-only Indian market and broker-account analysis inside Claude: positions, holdings, funds, NSE/BSE/NFO/BFO/MCX/CDS prices and candles, option chains with greeks, indicators, and e-mail watchers. Never places orders.",
   "author": {
     "name": "Certus Innovations Private Limited",

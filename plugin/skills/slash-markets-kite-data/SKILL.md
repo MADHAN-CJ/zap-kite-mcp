@@ -260,7 +260,7 @@ NSE), so keep it to one or two calls and resolve keys now, hard-coding them. Its
 once at creation and rejected if the output breaks that contract. The first check
 is a baseline and never alerts; one e-mail per not-met→met transition, at most
 every 15 minutes. When Zerodha access ends, watchers pause and resume by
-themselves after the next login. You cannot pause, resume or cancel: always show
+themselves after the user reconnects in the web app. You cannot pause, resume or cancel: always show
 the user the returned `pageUrl`.
 
 ```python
@@ -352,7 +352,7 @@ import zapkite as z
 d = z.continuous_futures("GOLD", days_back=45)
 c = z.closes(d)
 print(
-    f"GOLD front future {c[-1]:,.0f}: {(c[-1] / c[-22] - 1) * 100:+.1f}% over 22 sessions, "
+    f"GOLD front future {c[-1]:,.0f}: {(c[-1] / c[-22] - 1) * 100:+.1f}% over 22 trading days, "
     f"range {min(c[-22:]):,.0f}–{max(c[-22:]):,.0f}, ATR14 {z.atr(d, 14)[-1]:,.0f}"
 )
 ```

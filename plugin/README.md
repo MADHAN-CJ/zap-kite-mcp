@@ -13,14 +13,14 @@ broker account in read-only mode: it can analyse, it can never trade.
   implied volatility and greeks (indicative).
 - Indicators such as EMA, RSI, MACD, Bollinger bands, ATR and VWAP.
 - Watchers: Claude writes a condition, the /markets server checks it on a schedule during
-  market hours and e-mails you when it becomes true. No AI tokens are spent on the checks.
+  market hours and e-mails you when it becomes true. The checks make no AI calls.
 
 ## How to use it
 
 1. Install the plugin and connect the bundled **/markets** connector from the plugin's
    Connectors tab. You sign in with your e-mail and a one-time code.
-2. Open https://app.slash.markets, log in with the same e-mail, and connect your broker
-   account. Broker sessions expire daily, so repeat this each trading day.
+2. Open https://app.slash.markets, sign in with the same e-mail, and connect your broker
+   account there. The broker connection lapses every day, so repeat this each trading day.
 3. Ask Claude: "How is my portfolio doing?", "Is TCS bullish?", "What are NIFTY option writers
    positioned for this expiry?", "E-mail me when gold crosses 78,000."
 
@@ -31,11 +31,12 @@ library and the watcher contract.
 
 ## What data it sends and stores
 
-- Scripts Claude writes are sent to `mcp.slash.markets` and run there with your broker
-  session; the server keeps each script for up to 24 hours for diagnostics.
-- Your broker access token is stored encrypted on the /markets server and never shown to
-  Claude. Market data fetched by a script is returned to the conversation only as the script
-  prints it and is not stored by /markets.
+- Scripts Claude writes are sent to `mcp.slash.markets` and run there against your connected
+  broker account; the server keeps each script for up to 24 hours for diagnostics.
+- The broker connection exists only on the /markets server, encrypted at rest, and is never
+  shown to Claude. Nothing is read from your computer: the plugin ships no scripts, hooks or
+  settings, only this connector address and a skill. Market data fetched by a script is
+  returned to the conversation only as the script prints it and is not stored by /markets.
 - Watchers store the condition, schedule and alert history so they can run without you.
 
 Full details: [Privacy Policy](https://app.slash.markets/privacy) and
