@@ -270,6 +270,7 @@ def build_server(app: App) -> KiteServer:
         title="Run Python against Zerodha data",
         description=description,
         annotations=ToolAnnotations(
+            title="Run Python against Zerodha data",
             read_only_hint=False,
             destructive_hint=True,
             idempotent_hint=False,
@@ -306,6 +307,7 @@ def build_server(app: App) -> KiteServer:
         title="Zerodha connection status",
         description=AUTH_STATUS_DESCRIPTION,
         annotations=ToolAnnotations(
+            title="Zerodha connection status",
             read_only_hint=True, destructive_hint=False, open_world_hint=False
         ),
         meta=OAUTH_SCHEME,
@@ -339,6 +341,7 @@ def build_server(app: App) -> KiteServer:
         title="Signed-in /markets account",
         description=PROFILE_DESCRIPTION,
         annotations=ToolAnnotations(
+            title="Signed-in /markets account",
             read_only_hint=True, destructive_hint=False, open_world_hint=False
         ),
         meta={**OAUTH_SCHEME, "openai/profile": True},
@@ -356,6 +359,7 @@ def build_server(app: App) -> KiteServer:
         title="Create a market watcher",
         description=CREATE_WATCHER_DESCRIPTION,
         annotations=ToolAnnotations(
+            title="Create a market watcher",
             read_only_hint=False,
             destructive_hint=False,
             idempotent_hint=False,
@@ -394,6 +398,7 @@ def build_server(app: App) -> KiteServer:
         title="List market watchers",
         description=LIST_WATCHERS_DESCRIPTION,
         annotations=ToolAnnotations(
+            title="List market watchers",
             read_only_hint=True, destructive_hint=False, open_world_hint=False
         ),
         meta=OAUTH_SCHEME,

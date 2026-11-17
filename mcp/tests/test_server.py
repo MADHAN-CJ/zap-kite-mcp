@@ -339,6 +339,7 @@ def test_oauth_login_and_tools_before_connecting(h: Harness) -> None:
     for spec in mcp.tool_specs():
         hints = spec["annotations"]
         assert spec["title"] and len(spec["name"]) <= 64
+        assert hints.get("title") == spec["title"]  # directory reads annotations.title
         assert hints.get("readOnlyHint") is True or hints.get("destructiveHint") is not None
     read_only = {s["name"] for s in mcp.tool_specs() if s["annotations"].get("readOnlyHint")}
     assert read_only == {"auth_status", "profile", "list_watchers"}
