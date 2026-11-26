@@ -1,6 +1,6 @@
 import { HttpError } from "@/lib/server/auth";
 import { storeSession } from "@/lib/server/broker";
-import { exchangeRequestToken, userFromState } from "@/lib/server/kite";
+import { exchangeRequestToken, legacyForwardUrl, userFromState } from "@/lib/server/kite";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,17 @@ export async function GET(req: Request) {
     return Response.redirect(home, 303);
   }
   try {
-    const userId = await userFromState(url.searchParams.get("state"));
+    let userId: string;
+    try {
+      userId = await userFromState(url.searchParams.get("state"));
+    } catch (e) {
+      // Transition bridge: the Kite app has ONE redirect URL. A `state` this app cannot
+      // verify was signed by the successor app (its own secret) — hand the untouched
+      // callback over to it BEFORE the single-use request token is spent.
+      const forward = legacyForwardUrl(url.search);
+      if (forward && e instanceof HttpError) return Response.redirect(forward, 303);
+      throw e;
+    }
     const session = await exchangeRequestToken(requestToken);
     await storeSession(userId, session);
     home.searchParams.set("connected", "1");

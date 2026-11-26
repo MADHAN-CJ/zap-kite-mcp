@@ -98,3 +98,18 @@ export function nextTokenExpiry(now = new Date()): Date {
   const utc = candidate - istOffsetMs;
   return new Date(utc <= now.getTime() ? utc + 24 * 3600 * 1000 : utc);
 }
+
+/**
+ * Where to forward a Kite callback whose `state` is not ours: the successor
+ * app's callback (`KITE_CALLBACK_FORWARD_URL`, e.g. `https://<new host>/api/broker/kite/callback`).
+ * Unset → no forwarding (the old behaviour). The original query string is passed through
+ * verbatim so the request token and state arrive untouched.
+ */
+export function legacyForwardUrl(
+  search: string,
+  target = process.env.KITE_CALLBACK_FORWARD_URL,
+): string | null {
+  const base = target?.trim();
+  if (!base) return null;
+  return `${base.replace(/\/$/, "")}${search.startsWith("?") ? search : `?${search}`}`;
+}
