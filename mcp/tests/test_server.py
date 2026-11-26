@@ -799,6 +799,8 @@ def test_existing_dcr_clients_may_request_new_scopes(h: Harness) -> None:
         assert tok.status_code == 200, tok.text
         assert "kite:read" in tok.json()["scope"].split()
         assert Mcp(h.base, tok.json()["access_token"]).tools()[0] == "run_python"
+
+
 # --- Trusted-app grant (RFC 7523 jwt-bearer; plan: the /markets app mints user tokens silently) ---
 
 JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer"

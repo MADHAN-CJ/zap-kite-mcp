@@ -309,7 +309,9 @@ def build_server(app: App) -> KiteServer:
         description=AUTH_STATUS_DESCRIPTION,
         annotations=ToolAnnotations(
             title="Zerodha connection status",
-            read_only_hint=True, destructive_hint=False, open_world_hint=False
+            read_only_hint=True,
+            destructive_hint=False,
+            open_world_hint=False,
         ),
         meta=OAUTH_SCHEME,
     )
@@ -343,7 +345,9 @@ def build_server(app: App) -> KiteServer:
         description=PROFILE_DESCRIPTION,
         annotations=ToolAnnotations(
             title="Signed-in /markets account",
-            read_only_hint=True, destructive_hint=False, open_world_hint=False
+            read_only_hint=True,
+            destructive_hint=False,
+            open_world_hint=False,
         ),
         meta={**OAUTH_SCHEME, "openai/profile": True},
     )
@@ -400,7 +404,9 @@ def build_server(app: App) -> KiteServer:
         description=LIST_WATCHERS_DESCRIPTION,
         annotations=ToolAnnotations(
             title="List market watchers",
-            read_only_hint=True, destructive_hint=False, open_world_hint=False
+            read_only_hint=True,
+            destructive_hint=False,
+            open_world_hint=False,
         ),
         meta=OAUTH_SCHEME,
     )
@@ -590,6 +596,7 @@ def build_asgi(server: KiteServer, s: Settings) -> Starlette:
         auth.service_documentation_url,
         auth.client_registration_options or ClientRegistrationOptions(),
         auth.revocation_options or RevocationOptions(),
+        supports_identity_assertion=auth.identity_assertion_enabled,
     )
     metadata = base.model_dump(mode="json", by_alias=True, exclude_none=True)
     metadata.update(
