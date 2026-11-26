@@ -257,6 +257,7 @@ def build_server(app: App) -> KiteServer:
             ),
             required_scopes=[SCOPE],
             validate_token_resource=False,
+            identity_assertion_enabled=s.identity_assertion_enabled,
         ),
     )
     run_gate = anyio.Semaphore(s.max_concurrent_runs)

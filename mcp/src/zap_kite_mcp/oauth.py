@@ -5,21 +5,27 @@ import json
 import logging
 import secrets
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+import jwt
+import psycopg
 from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
     AuthorizationParams,
+    IdentityAssertionParams,
     OAuthAuthorizationServerProvider,
     RefreshToken,
+    TokenError,
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from psycopg.types.json import Jsonb
+from pydantic import AnyUrl
 
 from .config import SCOPE, Settings
 from .crypto import token_hash
@@ -31,6 +37,10 @@ TXN_TTL_S = 900
 CODE_TTL_S = 300
 ACCESS_TTL_S = 3600
 REFRESH_TTL_S = 30 * 24 * 3600
+JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer"
+# RFC 7523 §3 / SEP-990: an assertion is a short-lived, single-use grant.
+ASSERTION_MAX_LIFETIME_S = 300
+ASSERTION_TYP = "oauth-id-jag+jwt"
 
 OIDC_SCOPES = ("openid", "email")
 ALL_SCOPES = (SCOPE, *OIDC_SCOPES)
@@ -99,7 +109,26 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         self._http = http or httpx.AsyncClient(timeout=CIMD_TIMEOUT_S, follow_redirects=False)
         self._cimd: dict[str, tuple[float, OAuthClientInformationFull]] = {}
 
+    def trusted_client(self) -> OAuthClientInformationFull | None:
+        """The first-party app allowed to mint user tokens with jwt-bearer (config, not DCR)."""
+        s = self._settings
+        if not s.identity_assertion_enabled:
+            return None
+        return OAuthClientInformationFull(
+            client_id=s.trusted_client_id,
+            client_secret=s.trusted_client_secret,
+            client_name="/markets app",
+            redirect_uris=[AnyUrl(f"{s.app_url}/")],
+            grant_types=[JWT_BEARER],
+            response_types=["code"],
+            token_endpoint_auth_method="client_secret_post",
+            scope=SCOPE,
+        )
+
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
+        trusted = self.trusted_client()
+        if trusted is not None and client_id == trusted.client_id:
+            return trusted
         row = self._db.one("SELECT data FROM oauth_clients WHERE client_id = %s", (client_id,))
         if row:
             client = OAuthClientInformationFull.model_validate(row["data"])
@@ -237,6 +266,61 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
             subject=row["data"]["subject"],
         )
 
+    async def exchange_identity_assertion(
+        self, client: OAuthClientInformationFull, params: IdentityAssertionParams
+    ) -> OAuthToken:
+        """Trusted-app grant: the /markets app asserts WHICH user it acts for; we issue its token.
+
+        The assertion is an HS256 JWT signed with the shared ZAP_KITE_MCP_ASSERTION_SECRET:
+        iss = client_id = the trusted client, aud = this issuer, sub = users.id, jti single-use,
+        lifetime <= 5 minutes. Only the trusted client may present one (the SDK already requires a
+        confidential client; DCR clients never carry the jwt-bearer grant type). Access token only —
+        no refresh token: the app simply mints again.
+        """
+        s = self._settings
+        trusted = self.trusted_client()
+        if trusted is None or client.client_id != trusted.client_id:
+            raise TokenError("unauthorized_client", "This client may not use the jwt-bearer grant.")
+        try:
+            header = jwt.get_unverified_header(params.assertion)
+            claims = jwt.decode(
+                params.assertion,
+                s.assertion_secret,
+                algorithms=["HS256"],
+                audience=s.public_url,
+                issuer=client.client_id,
+                leeway=10,
+                options={"require": ["exp", "iat", "sub", "jti", "aud", "iss"]},
+            )
+        except jwt.PyJWTError as e:
+            raise TokenError("invalid_grant", f"Assertion rejected: {e}") from e
+        if header.get("typ") != ASSERTION_TYP:
+            raise TokenError("invalid_grant", f"Assertion typ must be {ASSERTION_TYP}.")
+        if claims.get("client_id") != client.client_id:
+            raise TokenError("invalid_grant", "Assertion client_id does not match the client.")
+        if int(claims["exp"]) - int(claims["iat"]) > ASSERTION_MAX_LIFETIME_S:
+            raise TokenError("invalid_grant", "Assertion lifetime is too long.")
+        resource = claims.get("resource") or params.resource
+        if resource is not None and resource.rstrip("/") != s.public_url.rstrip("/"):
+            raise TokenError("invalid_grant", "Assertion resource is not this server.")
+        scopes = params.scopes or [SCOPE]
+        if any(scope != SCOPE for scope in scopes):
+            raise TokenError("invalid_scope", f"Only {SCOPE} can be granted.")
+        try:
+            subject = str(uuid.UUID(str(claims["sub"])))
+        except ValueError as e:
+            raise TokenError("invalid_grant", "Assertion sub is not a user id.") from e
+        try:
+            self._db.execute(
+                "INSERT INTO oauth_assertions (jti, expires_at) VALUES (%s, to_timestamp(%s))",
+                (str(claims["jti"]), int(claims["exp"])),
+            )
+        except psycopg.errors.UniqueViolation as e:
+            raise TokenError("invalid_grant", "Assertion already used.") from e
+        if self._db.one("SELECT 1 FROM users WHERE id = %s", (subject,)) is None:
+            raise TokenError("invalid_grant", "Assertion sub is not a known user.")
+        return self._issue_access(client.client_id, subject, [SCOPE])
+
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
         self._db.execute(
             "UPDATE oauth_tokens SET revoked = true WHERE pair = "
@@ -278,6 +362,25 @@ class OAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
             expires_in=ACCESS_TTL_S,
             scope=" ".join(scopes),
             refresh_token=refresh,
+        )
+
+    def _issue_access(self, client_id: str, subject: str, scopes: list[str]) -> OAuthToken:
+        """Access token only (1 h) for the trusted-app grant; the app re-mints, never refreshes."""
+        access = secrets.token_urlsafe(32)
+        data = Jsonb({"client_id": client_id, "subject": subject, "scopes": scopes})
+        self._db.execute(
+            "INSERT INTO oauth_tokens (token_hash, kind, data, pair, expires_at) VALUES "
+            "(%s, 'access', %s, %s, %s)",
+            (token_hash(access), data, secrets.token_hex(8), _ts(ACCESS_TTL_S)),
+        )
+        self._db.execute(
+            "DELETE FROM oauth_assertions WHERE expires_at < now() - interval '1 hour'"
+        )
+        return OAuthToken(
+            access_token=access,
+            token_type="Bearer",
+            expires_in=ACCESS_TTL_S,
+            scope=" ".join(scopes),
         )
 
     def txn(self, txn_id: str) -> dict[str, Any] | None:

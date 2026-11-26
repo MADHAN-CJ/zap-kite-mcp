@@ -10,6 +10,7 @@ import socket
 import sys
 import threading
 import time
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -51,7 +52,10 @@ def _cimd_documents(request: httpx.Request) -> httpx.Response:
     )
 
 
+TRUSTED_ID, TRUSTED_SECRET = "markets-app-test", secrets.token_hex(24)
+ASSERTION_SECRET = secrets.token_hex(32)
 TABLES = (
+    "oauth_assertions",
     "watcher_fires",
     "watchers",
     "oauth_tokens",
@@ -101,6 +105,9 @@ class Harness:
             "ZAP_KITE_MCP_STATE_DIR": str(tmp / "state"),
             "DEV_LOGIN_EMAIL": DEV_EMAIL,
             "DEV_LOGIN_CODE": DEV_CODE,
+            "ZAP_KITE_MCP_TRUSTED_CLIENT_ID": TRUSTED_ID,
+            "ZAP_KITE_MCP_TRUSTED_CLIENT_SECRET": TRUSTED_SECRET,
+            "ZAP_KITE_MCP_ASSERTION_SECRET": ASSERTION_SECRET,
             "WATCHERS_MIN_GAP_MINUTES": "0",
             "ZAPKITE_TODAY": TODAY.isoformat(),
             "RESEND_API_KEY": "",
@@ -792,3 +799,131 @@ def test_existing_dcr_clients_may_request_new_scopes(h: Harness) -> None:
         assert tok.status_code == 200, tok.text
         assert "kite:read" in tok.json()["scope"].split()
         assert Mcp(h.base, tok.json()["access_token"]).tools()[0] == "run_python"
+# --- Trusted-app grant (RFC 7523 jwt-bearer; plan: the /markets app mints user tokens silently) ---
+
+JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer"
+
+
+def assertion(
+    h: Harness,
+    sub: str,
+    *,
+    secret: str = ASSERTION_SECRET,
+    aud: str | None = None,
+    iss: str = TRUSTED_ID,
+    typ: str = "oauth-id-jag+jwt",
+    ttl: int = 60,
+    client_id: str | None = TRUSTED_ID,
+    jti: str | None = None,
+) -> str:
+    import jwt as pyjwt
+
+    now = int(time.time())
+    claims: dict[str, Any] = {
+        "iss": iss,
+        "sub": sub,
+        "aud": aud or h.base,
+        "iat": now,
+        "exp": now + ttl,
+        "jti": jti or secrets.token_urlsafe(16),
+        "scope": "kite:read",
+        "resource": f"{h.base}/",
+    }
+    if client_id is not None:
+        claims["client_id"] = client_id
+    return pyjwt.encode(claims, secret, algorithm="HS256", headers={"typ": typ})
+
+
+def mint(h: Harness, token: str, **overrides: str) -> httpx.Response:
+    data = {
+        "grant_type": JWT_BEARER,
+        "assertion": token,
+        "client_id": TRUSTED_ID,
+        "client_secret": TRUSTED_SECRET,
+        "scope": "kite:read",
+        **overrides,
+    }
+    return httpx.post(f"{h.base}/token", data=data, timeout=10)
+
+
+def test_metadata_advertises_the_jwt_bearer_grant(h: Harness) -> None:
+    meta = httpx.get(f"{h.base}/.well-known/oauth-authorization-server").json()
+    assert JWT_BEARER in meta["grant_types_supported"]
+
+
+def test_trusted_app_mints_a_user_token_without_login_pages(h: Harness) -> None:
+    h.reset_db()
+    user_id = user_id_of(h)
+    r = mint(h, assertion(h, user_id))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["token_type"].lower() == "bearer" and body["expires_in"] == 3600
+    assert "refresh_token" not in body, "trusted-app tokens are access-only; the app mints again"
+    mcp = Mcp(h.base, body["access_token"])
+    text, is_err = mcp.tool("auth_status")
+    assert not is_err
+    status = json.loads(text)
+    assert status["signedIn"] is True and status["email"] == DEV_EMAIL
+    assert status["broker"] == "not_connected"
+    # Same user as the login-page flow would resolve: a Kite session stored for the
+    # user is visible through the minted token.
+    connect_kite(h)
+    assert json.loads(mcp.tool("auth_status")[0])["broker"] == "active"
+
+
+def test_assertion_rejections(h: Harness) -> None:
+    h.reset_db()
+    user_id = user_id_of(h)
+    cases = {
+        "wrong signature": assertion(h, user_id, secret="x" * 40),
+        "wrong audience": assertion(h, user_id, aud="https://other.example"),
+        "wrong issuer": assertion(h, user_id, iss="someone-else"),
+        "wrong typ": assertion(h, user_id, typ="JWT"),
+        "expired": assertion(h, user_id, ttl=-30),
+        "lifetime too long": assertion(h, user_id, ttl=3600),
+        "client_id claim mismatch": assertion(h, user_id, client_id="other"),
+        "client_id claim missing": assertion(h, user_id, client_id=None),
+        "sub not a uuid": assertion(h, "not-a-user"),
+        "sub unknown user": assertion(h, str(uuid.uuid4())),
+    }
+    for label, token in cases.items():
+        r = mint(h, token)
+        assert r.status_code == 400, f"{label}: {r.status_code} {r.text}"
+        assert r.json()["error"] == "invalid_grant", f"{label}: {r.text}"
+    # scope policy
+    r = mint(h, assertion(h, user_id), scope="kite:write")
+    assert r.status_code == 400 and r.json()["error"] == "invalid_scope", r.text
+    # replay: the same assertion is accepted once
+    once = assertion(h, user_id)
+    assert mint(h, once).status_code == 200
+    replay = mint(h, once)
+    assert replay.status_code == 400 and "already used" in replay.json()["error_description"]
+    # bad client secret → client authentication fails
+    r = mint(h, assertion(h, user_id), client_secret="wrong")
+    assert r.status_code in (400, 401) and r.json()["error"] in (
+        "invalid_client",
+        "unauthorized_client",
+    ), r.text
+
+
+def test_dcr_clients_cannot_use_the_jwt_bearer_grant(h: Harness) -> None:
+    h.reset_db()
+    user_id = user_id_of(h)
+    tokens = oauth_tokens(h)  # a normal public DCR client
+    r = httpx.post(
+        f"{h.base}/token",
+        data={
+            "grant_type": JWT_BEARER,
+            "assertion": assertion(
+                h, user_id, iss=tokens["client_id"], client_id=tokens["client_id"]
+            ),
+            "client_id": tokens["client_id"],
+        },
+        timeout=10,
+    )
+    assert r.status_code in (400, 401), r.text
+    assert r.json()["error"] in (
+        "unauthorized_client",
+        "invalid_client",
+        "unsupported_grant_type",
+    ), r.text

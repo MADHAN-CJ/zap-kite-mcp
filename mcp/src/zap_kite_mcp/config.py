@@ -63,6 +63,16 @@ class Settings:
     dev_login_code: str
     risk_free_rate: str
     openai_apps_challenge: str
+    # Trusted first-party app (the /markets web app on eve): it mints per-user access
+    # tokens with the RFC 7523 jwt-bearer grant instead of sending users through the
+    # login pages. All three must be set to enable the grant; empty = disabled.
+    trusted_client_id: str
+    trusted_client_secret: str
+    assertion_secret: str
+
+    @property
+    def identity_assertion_enabled(self) -> bool:
+        return bool(self.trusted_client_id and self.trusted_client_secret and self.assertion_secret)
 
     @property
     def mcp_url(self) -> str:
@@ -85,6 +95,18 @@ def load_settings() -> Settings:
     if not api_key or not api_secret:
         raise ConfigError("KITE_API_KEY and KITE_API_SECRET must be set")
     state_dir = Path(_env("ZAP_KITE_MCP_STATE_DIR") or "~/.zap-kite-mcp").expanduser()
+    trusted = (
+        _env("ZAP_KITE_MCP_TRUSTED_CLIENT_ID"),
+        _env("ZAP_KITE_MCP_TRUSTED_CLIENT_SECRET"),
+        _env("ZAP_KITE_MCP_ASSERTION_SECRET"),
+    )
+    if any(trusted) and not all(trusted):
+        raise SystemExit(
+            "Set all of ZAP_KITE_MCP_TRUSTED_CLIENT_ID, ZAP_KITE_MCP_TRUSTED_CLIENT_SECRET and "
+            "ZAP_KITE_MCP_ASSERTION_SECRET, or none of them."
+        )
+    if trusted[2] and len(trusted[2]) < 32:
+        raise SystemExit("ZAP_KITE_MCP_ASSERTION_SECRET must be at least 32 characters.")
     return Settings(
         database_url=database_url,
         public_url=(_env("ZAP_KITE_MCP_PUBLIC_URL") or DEFAULT_PUBLIC_URL).rstrip("/"),
@@ -114,4 +136,7 @@ def load_settings() -> Settings:
         dev_login_code=_env("DEV_LOGIN_CODE"),
         risk_free_rate=_env("ZAPKITE_RISK_FREE_RATE"),
         openai_apps_challenge=_env("OPENAI_APPS_CHALLENGE_TOKEN"),
+        trusted_client_id=trusted[0],
+        trusted_client_secret=trusted[1],
+        assertion_secret=trusted[2],
     )
