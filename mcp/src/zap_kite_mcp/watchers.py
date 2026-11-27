@@ -17,6 +17,7 @@ from .db import Database, Row
 from .emails import session_paused, watcher_alert
 from .identity import Identity
 from .mail import Mailer
+from .notifications import app_delivery_enabled, wake_app_delivery
 from .pages import LOGOMARK_PATHS
 from .runner import Runner
 
@@ -141,6 +142,7 @@ class Watchers:
         self._runner = runner
         self._mailer = mailer
         self._identity = identity
+        self._app_delivery = False
 
     @property
     def page_url(self) -> str:
@@ -295,6 +297,7 @@ class Watchers:
 
     def sweep(self, force: bool = False, min_gap_minutes: int | None = None) -> dict[str, Any]:
         """One sweeper tick: retry unsent emails, expire, run due checks per user, mail expiries."""
+        self._app_delivery = app_delivery_enabled(self._db)
         open_markets = {m for m in MARKETS if is_open(m)}
         report: dict[str, Any] = {
             "ranAt": _now().isoformat(timespec="seconds"),
@@ -309,8 +312,9 @@ class Watchers:
             "emailRetries": 0,
             "notes": [],
         }
-        self._notify_expired_sessions(report)
-        self._retry_unsent(report)
+        if not self._app_delivery:
+            self._notify_expired_sessions(report)
+            self._retry_unsent(report)
         self._db.execute("DELETE FROM otps WHERE expires_at < now() - interval '7 days'")
         report["expired"] = self._db.execute(
             "UPDATE watchers SET status = 'EXPIRED', paused_by = NULL, updated_at = now() "
@@ -334,6 +338,8 @@ class Watchers:
             except Exception as e:
                 log.exception("sweep failed for user %s", user_id)
                 report["notes"].append(f"user {user_id}: {e}")
+        if self._app_delivery:
+            wake_app_delivery()
         return report
 
     def _notify_expired_sessions(self, report: dict[str, Any]) -> None:
@@ -357,6 +363,10 @@ class Watchers:
                 report["emailRetries"] += 1
 
     def _mail_fire(self, row: Row, value: Any, detail: str | None) -> bool:
+        if self._app_delivery:
+            # The fire insert queued this mail transactionally in eve.notification_jobs.
+            # Only the app worker marks watcher_fires.emailed after provider acceptance.
+            return False
         email = self._identity.email_of(str(row["user_id"]))
         if not email:
             return False
